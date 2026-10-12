@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & publish APK
+    runs-on: ubuntu-latest
+
+    # Secrets are mapped to job env so shell steps can test whether signing is configured.
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK packages
+        run: |
+          set -e
+          SDKMANAGER="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+          else
+            echo "sdkmanager not found on PATH; relying on AGP auto-download."
+          fi
+
+      - name: Decode signing keystore
+        id: signing
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            KEYSTORE_PATH="$RUNNER_TEMP/substream-release.jks"
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+            echo "path=$KEYSTORE_PATH" >> "$GITHUB_OUTPUT"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Keystore decoded - release APK will be signed."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No KEYSTORE_BASE64 secret found. Building an UNSIGNED release APK (not installable). Add the signing secrets to publish an installable build."
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build release APK
+        env:
+          SUBSTREAM_KEYSTORE_PATH: ${{ steps.signing.outputs.path }}
+          SUBSTREAM_KEYSTORE_PASSWORD: ${{ env.KEYSTORE_PASSWORD }}
+          SUBSTREAM_KEY_ALIAS: ${{ env.KEY_ALIAS }}
+          SUBSTREAM_KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Stage APK for publishing
+        id: apk
+        run: |
+          SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -n1)
+          if [ -z "$SRC" ]; then
+            echo "::error::No APK found under app/build/outputs/apk/release"
+            exit 1
+          fi
+          VERSION="${GITHUB_REF_NAME}"
+          case "$VERSION" in v*) ;; *) VERSION="snapshot" ;; esac
+          STAGE="$RUNNER_TEMP/stage"
+          mkdir -p "$STAGE"
+          # Stable name powers the README's always-valid "latest" download link.
+          cp "$SRC" "$STAGE/SubStream.apk"
+          # Versioned name is handy for release history.
+          cp "$SRC" "$STAGE/SubStream-${VERSION}.apk"
+          echo "dir=$STAGE" >> "$GITHUB_OUTPUT"
+          echo "Staged APKs for version: $VERSION (signed=${{ steps.signing.outputs.signed }})"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: substream-apk
+          path: ${{ steps.apk.outputs.dir }}/*.apk
+          if-no-files-found: error
+
+      - name: Publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: SubStream ${{ github.ref_name }}
+          files: ${{ steps.apk.outputs.dir }}/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: true

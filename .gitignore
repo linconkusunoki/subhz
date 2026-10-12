@@ -13,3 +13,15 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Signing keys — NEVER commit these
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+
+# Local release build outputs (APK/AAB + signing metadata)
+/app/release/
+*.apk.idsig

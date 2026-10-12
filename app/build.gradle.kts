@@ -1,8 +1,24 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
 }
+
+// Release signing is driven entirely by environment variables so CI can inject
+// GitHub Secrets without any secret ever living in the repo. When the vars are
+// absent (typical local dev), the release build simply stays unsigned.
+val keystorePath = providers.environmentVariable("SUBSTREAM_KEYSTORE_PATH").orNull
+val keystorePassword = providers.environmentVariable("SUBSTREAM_KEYSTORE_PASSWORD").orNull
+val signingKeyAlias = providers.environmentVariable("SUBSTREAM_KEY_ALIAS").orNull
+val signingKeyPassword = providers.environmentVariable("SUBSTREAM_KEY_PASSWORD").orNull
+
+val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
+    File(keystorePath).isFile &&
+    !keystorePassword.isNullOrBlank() &&
+    !signingKeyAlias.isNullOrBlank() &&
+    !signingKeyPassword.isNullOrBlank()
 
 android {
     namespace = "com.substream"
@@ -20,10 +36,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = File(keystorePath!!)
+                storePassword = keystorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
+            }
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
