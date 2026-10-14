@@ -213,6 +213,53 @@ class SubsonicRepository(
     }
 
     /**
+     * Records a play of a song so the server can build listening history and "recently played".
+     *
+     * Runs on [Dispatchers.IO] like every other call here and reports failures as a
+     * [Result] rather than throwing, because a play that never reaches the server is a
+     * bookkeeping miss, not something the listener should be shown.
+     *
+     * @param songId The unique ID of the song that was played.
+     * @param playedAtMillis When the song started playing, in epoch millis. Not "now": the
+     * server timestamps the play from this value, so it must be the moment playback began.
+     */
+    suspend fun scrobble(songId: String, playedAtMillis: Long): Result<Unit> = call {
+        val response = api.scrobble(
+            songId = songId,
+            time = playedAtMillis,
+            submission = true
+        ).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "The server refused the play")
+        }
+    }
+
+    /**
+     * Announces the song the listener is on, so the server can show it as now playing.
+     *
+     * Goes to `scrobble.view` with `submission = false` rather than to Subsonic's standalone
+     * `nowPlaying.view`: Navidrome does not route that endpoint and answers 404, while this is
+     * both what it implements and what the spec designates for a non-submission notification.
+     *
+     * `submission = false` never counts a play — the server only increments play counts on a
+     * submission — so this is safe to send as often as the track changes.
+     *
+     * @param songId The unique ID of the song that started playing.
+     * @param playedAtMillis When it started playing, in epoch millis. The same value [scrobble]
+     * later carries, because the server keys both entries off it.
+     */
+    suspend fun nowPlaying(songId: String, playedAtMillis: Long): Result<Unit> = call {
+        val response = api.scrobble(
+            songId = songId,
+            time = playedAtMillis,
+            submission = false
+        ).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "The server refused the now playing announcement")
+        }
+    }
+
+    /**
      * Constructs a full authenticated URL to fetch cover art for a given coverArt ID.
      * Returns null when nobody is signed in.
      *

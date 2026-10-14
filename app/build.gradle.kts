@@ -63,6 +63,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // For BuildConfig.DEBUG, which gates the HTTP logging so a release build never writes
+        // the Subsonic auth token to Logcat.
+        buildConfig = true
     }
 }
 

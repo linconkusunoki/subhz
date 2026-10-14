@@ -1,5 +1,6 @@
 package com.substream.data.api
 
+import com.substream.BuildConfig
 import com.substream.data.preferences.ServerPreferences
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,11 +22,16 @@ object ApiClientFactory {
     private const val PLACEHOLDER_BASE_URL = "http://substream.invalid/"
 
     fun createService(serverPreferences: ServerPreferences): SubsonicApiService {
-        // Setup logger to see requests in Logcat.
-        // ponytail: BODY logs the auth token in the query string; drop to BASIC before
-        // shipping a release build, or redact it.
+        // Debug builds log the whole request so the API calls are inspectable in Logcat.
+        // Release builds log nothing: the Subsonic token rides in the query string, there is no
+        // header form of it, and redactHeader cannot hide a query parameter. So the only way to
+        // keep a credential out of the log is to not log the URL at all.
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
         }
 
         val client = OkHttpClient.Builder()

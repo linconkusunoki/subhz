@@ -249,6 +249,30 @@ interface SubsonicApiService {
         @Query("f") format: String = "json"
     ): SubsonicResponseWrapper
 
+    /**
+ * Records a play, or announces one in progress.
+ *
+ * `time` is when the song started, in epoch millis, not when the play was noticed — the server
+ * files the play under that timestamp, so submitting "now" would push every play forward by
+ * however long the first half of the track took.
+ *
+ * `submission = true` writes listening history. `submission = false` is only the transient
+ * "now playing" ping, superseded by whatever the listener plays next.
+ *
+ * Both are the same call on purpose. Subsonic also defines a standalone `nowPlaying.view`, but
+ * Navidrome does not route it and answers 404; `submission = false` is what it (and the spec)
+ * actually route a now-playing announcement to, so it is the portable choice.
+ */
+@GET("rest/scrobble.view")
+suspend fun scrobble(
+    @Query("id") songId: String,
+    @Query("time") time: Long,
+    @Query("submission") submission: Boolean = true,
+    @Query("v") version: String = "1.16.1",
+    @Query("c") client: String = "SubStream",
+    @Query("f") format: String = "json"
+): SubsonicResponseWrapper
+
     @GET("rest/unstar.view")
     suspend fun unstar(
         @Query("id") id: String? = null,
