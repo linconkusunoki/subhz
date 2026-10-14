@@ -60,6 +60,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val loadingAlbumId by viewModel.loadingAlbumId.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadHome()
@@ -90,6 +91,8 @@ fun HomeScreen(
                     onArtistClick = onArtistClick,
                     onSearchClick = onSearchClick,
                     onToggleStar = viewModel::toggleStarAlbum,
+                    onPlayAlbum = viewModel::playAlbum,
+                    loadingAlbumId = loadingAlbumId,
                     getCoverArtUrl = viewModel::getCoverArtUrl,
                 )
             }
@@ -104,6 +107,8 @@ private fun HomeContent(
     onArtistClick: (String, String) -> Unit,
     onSearchClick: () -> Unit,
     onToggleStar: (Album) -> Unit,
+    onPlayAlbum: (Album) -> Unit,
+    loadingAlbumId: String?,
     getCoverArtUrl: (String?) -> String?,
 ) {
     val shelves = listOf(
@@ -170,6 +175,8 @@ private fun HomeContent(
                             onClick = { onAlbumClick(album) },
                             onArtistClick = onArtistClick,
                             onToggleStar = { onToggleStar(album) },
+                            onPlay = { onPlayAlbum(album) },
+                            isPlayingLoading = loadingAlbumId == album.id,
                         )
                     }
                 }

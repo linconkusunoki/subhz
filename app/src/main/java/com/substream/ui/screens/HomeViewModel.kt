@@ -6,6 +6,7 @@ import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
 import com.substream.data.api.Artist
 import com.substream.data.repository.SubsonicRepository
+import com.substream.player.PlayerManager
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,11 +48,18 @@ sealed interface HomeState {
  * ViewModel backing the home screen: getAlbumList2 (newest / frequent / random) and getStarred2.
  */
 class HomeViewModel(
-    private val repository: SubsonicRepository
+    private val repository: SubsonicRepository,
+    // The player is infrastructure rather than UI, so it is reached from here rather than having
+    // the screen drive a fetch-then-play dance for every shelf card.
+    private val playerManager: PlayerManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeState>(HomeState.Idle)
     val uiState: StateFlow<HomeState> = _uiState.asStateFlow()
+
+    /** The album whose tracks are being fetched for a play tap, so only that card spins. */
+    private val _loadingAlbumId = MutableStateFlow<String?>(null)
+    val loadingAlbumId: StateFlow<String?> = _loadingAlbumId.asStateFlow()
 
     /**
      * Loads every home section concurrently so the screen appears after one round trip instead
@@ -84,6 +92,25 @@ class HomeViewModel(
             } catch (e: Exception) {
                 _uiState.value = HomeState.Error(e.message ?: "Could not load your home")
             }
+        }
+    }
+
+    /**
+     * Plays an album from its shelf card, without opening it first.
+     *
+     * The tracks are not in the shelf response, so this is a fetch and then a play. One at a time:
+     * a second tap while the first is in flight would queue two albums at the same spot.
+     */
+    fun playAlbum(album: Album) {
+        if (_loadingAlbumId.value != null) return
+        viewModelScope.launch {
+            _loadingAlbumId.value = album.id
+            repository.getAlbumDetails(album.id).onSuccess { detail ->
+                if (detail.song.isNotEmpty()) {
+                    playerManager.playSongs(detail.song)
+                }
+            }
+            _loadingAlbumId.value = null
         }
     }
 

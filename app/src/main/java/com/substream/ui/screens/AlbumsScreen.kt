@@ -17,8 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
@@ -269,7 +271,9 @@ fun AlbumCard(
     onClick: () -> Unit,
     onArtistClick: (artistId: String, artistName: String) -> Unit,
     onToggleStar: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPlay: (() -> Unit)? = null,
+    isPlayingLoading: Boolean = false,
 ) {
     Card(
         onClick = onClick,
@@ -303,6 +307,36 @@ fun AlbumCard(
                         contentDescription = if (album.isStarred) "Unfavorite" else "Favorite",
                         tint = if (album.isStarred) Color(0xFFFFC107) else Color.White
                     )
+                }
+
+                // Play, where a shelf card can act rather than only lead somewhere. Bottom-start so
+                // it does not sit beside the star it would be mistaken for.
+                if (onPlay != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (isPlayingLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White,
+                            )
+                        } else {
+                            IconButton(onClick = onPlay) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Play ${album.name}",
+                                    tint = Color.White,
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

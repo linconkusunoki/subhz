@@ -107,7 +107,7 @@ val appModule = module {
     }
 
     viewModel {
-        HomeViewModel(repository = get())
+        HomeViewModel(repository = get(), playerManager = get())
     }
 
     viewModel {
