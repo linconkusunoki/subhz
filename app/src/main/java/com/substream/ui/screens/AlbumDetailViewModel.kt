@@ -74,6 +74,22 @@ class AlbumDetailViewModel(
     /**
      * Toggles star/favorite state for the current AlbumDetail.
      */
+    /**
+     * Rates the album 0-5 and writes it into the loaded copy so the stars move without a refetch.
+     */
+    fun rateAlbum(albumDetail: AlbumDetail, rating: Int) {
+        viewModelScope.launch {
+            repository.setRating(id = albumDetail.id, rating = rating).onSuccess { newRating ->
+                val current = _uiState.value
+                if (current is AlbumDetailState.Success) {
+                    _uiState.value = current.copy(
+                        albumDetail = current.albumDetail.copy(userRating = newRating.takeIf { it > 0 })
+                    )
+                }
+            }
+        }
+    }
+
     fun toggleStarAlbum(albumDetail: AlbumDetail) {
         viewModelScope.launch {
             val isStarred = albumDetail.isStarred

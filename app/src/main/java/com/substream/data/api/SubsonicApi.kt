@@ -184,7 +184,9 @@ data class ArtistDetail(
     val coverArt: String? = null,
     val albumCount: Int? = null,
     val album: List<Album> = emptyList(),
-    val starred: String? = null
+    val starred: String? = null,
+    /** 0-5, set with setRating. Navidrome stores it per user; absent means unrated. */
+    val userRating: Int? = null
 ) {
     val isStarred: Boolean get() = starred != null
 }
@@ -198,7 +200,9 @@ data class Album(
     val coverArt: String? = null,
     val songCount: Int? = null,
     val year: Int? = null,
-    val starred: String? = null
+    val starred: String? = null,
+    /** 0-5, set with setRating. */
+    val userRating: Int? = null
 ) {
     val isStarred: Boolean get() = starred != null
 }
@@ -214,7 +218,9 @@ data class AlbumDetail(
     val duration: Int? = null,
     val year: Int? = null,
     val song: List<Song> = emptyList(),
-    val starred: String? = null
+    val starred: String? = null,
+    /** 0-5, set with setRating. */
+    val userRating: Int? = null
 ) {
     val isStarred: Boolean get() = starred != null
 }
@@ -237,7 +243,9 @@ data class Song(
     val path: String? = null,
     val albumId: String? = null,
     val artistId: String? = null,
-    val starred: String? = null
+    val starred: String? = null,
+    /** 0-5, set with setRating. */
+    val userRating: Int? = null
 ) {
     val isStarred: Boolean get() = starred != null
 }
@@ -321,6 +329,19 @@ interface SubsonicApiService {
         @Field("songIdToAdd") songIdToAdd: List<String> = emptyList(),
         @Field("songIndexToRemove") songIndexToRemove: List<Int> = emptyList(),
         @Field("name") name: String? = null,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Rates something 0-5, where 0 clears the rating. This is the one call that writes the number:
+     * starred and played are annotations of their own.
+     */
+    @GET("rest/setRating.view")
+    suspend fun setRating(
+        @Query("id") id: String,
+        @Query("rating") rating: Int,
         @Query("v") version: String = "1.16.1",
         @Query("c") client: String = "SubStream",
         @Query("f") format: String = "json"

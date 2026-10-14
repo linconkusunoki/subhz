@@ -19,6 +19,9 @@ import java.io.IOException
 /** Page size for the album walk in [mainArtistIds]; 500 is the server maximum. */
 private const val ALBUM_PAGE = 500
 
+/** The scale setRating uses. Five stars, and zero clears. */
+const val MAX_RATING = 5
+
 /**
  * The IDs of every artist that is some album's primary artist, found by paging the whole album
  * list. An album carries exactly one artistId even when the server knows several participants,
@@ -199,6 +202,19 @@ class SubsonicRepository(
      * artist and title call is the fallback rather than an extra: it is the one every server has,
      * and it is what returns the plain text when there is no timing to be had.
      */
+    /**
+     * Rates a song, album or artist 0-5. Zero is the clear: the rating is one number, and the
+     * server has no separate unrated state to remember.
+     */
+    suspend fun setRating(id: String, rating: Int): Result<Int> = call {
+        val clamped = rating.coerceIn(0, MAX_RATING)
+        val response = api.setRating(id = id, rating = clamped).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "Could not save the rating")
+        }
+        clamped
+    }
+
     suspend fun getSongLyrics(song: Song): Result<SongLyrics> = call {
         val structured = runCatching {
             api.getLyricsBySongId(songId = song.id).subsonicResponse.lyricsList

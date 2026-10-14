@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
 import com.substream.ui.components.LyricsPanel
+import com.substream.ui.components.RatingBar
+import com.substream.ui.components.RatingViewModel
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -62,6 +64,7 @@ import coil.compose.AsyncImage
 import com.substream.data.api.Song
 import com.substream.player.PlayerManager
 import com.substream.player.PlayerState
+import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import java.util.Locale
 
@@ -76,6 +79,7 @@ fun NowPlayingScreen(
     onBackClick: () -> Unit,
     onArtistClick: (String, String) -> Unit = { _, _ -> },
     playerManager: PlayerManager = koinInject(),
+    ratingViewModel: RatingViewModel = koinViewModel(),
     modifier: Modifier = Modifier
 ) {
     val playerState by playerManager.playerState.collectAsState()
@@ -218,9 +222,18 @@ fun NowPlayingScreen(
                     onSeek = { positionMs -> playerManager.seekTo(positionMs) }
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // 4. Centered Media Controls
+                // 4. Rating for the track being played
+                RatingBar(
+                    rating = currentSong.userRating,
+                    onRate = { rating -> ratingViewModel.rate(currentSong, rating) },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 5. Centered Media Controls
                 PlaybackControlsSection(
                     playerState = playerState,
                     onTogglePlayPause = { playerManager.togglePlayPause() },

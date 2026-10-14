@@ -64,6 +64,7 @@ import com.substream.data.api.Album
 import com.substream.data.api.ArtistDetail
 import com.substream.data.api.Song
 import com.substream.ui.components.AddToPlaylistSheet
+import com.substream.ui.components.RatingBar
 import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
@@ -168,6 +169,7 @@ fun ArtistDetailScreen(
                         onToggleStarArtist = { viewModel.toggleStarArtist(state.artistDetail) },
                         onToggleStarSong = viewModel::toggleStarSong,
                         onAddToPlaylist = { song -> addingToPlaylist = song },
+                        onRate = { artistDetail, rating -> viewModel.rateArtist(artistDetail, rating) },
                         onPlayAll = { songs -> playerManager.playSongs(songs) },
                         onShuffleAll = { songs -> playerManager.playSongs(songs.shuffled()) },
                     )
@@ -205,6 +207,7 @@ private fun ArtistDetailContent(
     onToggleStarArtist: () -> Unit,
     onToggleStarSong: (Song) -> Unit,
     onAddToPlaylist: (Song) -> Unit,
+    onRate: (ArtistDetail, Int) -> Unit,
     onPlayAll: (List<Song>) -> Unit,
     onShuffleAll: (List<Song>) -> Unit,
     modifier: Modifier = Modifier,
@@ -224,6 +227,7 @@ private fun ArtistDetailContent(
                 onPlayAll = { onPlayAll(songs) },
                 onShuffleAll = { onShuffleAll(songs) },
                 songsLoaded = songsState is LoadState.Success && songs.isNotEmpty(),
+                onRate = onRate,
             )
         }
 
@@ -318,6 +322,7 @@ private fun ArtistHeader(
     onPlayAll: () -> Unit,
     onShuffleAll: () -> Unit,
     songsLoaded: Boolean,
+    onRate: (ArtistDetail, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -376,6 +381,11 @@ private fun ArtistHeader(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 16.dp)
                 ) {
+                    RatingBar(
+                        rating = artistDetail.userRating,
+                        onRate = { rating -> onRate(artistDetail, rating) },
+                        modifier = Modifier.align(Alignment.End),
+                    )
                     Text(
                         text = artistDetail.name,
                         style = MaterialTheme.typography.headlineMedium,

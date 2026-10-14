@@ -17,6 +17,7 @@ import com.substream.player.PlayerManager
 import com.substream.player.cache.MediaCacheManager
 import com.substream.ui.components.AddToPlaylistViewModel
 import com.substream.ui.components.LyricsViewModel
+import com.substream.ui.components.RatingViewModel
 import com.substream.ui.screens.AlbumDetailViewModel
 import com.substream.ui.screens.AlbumsViewModel
 import com.substream.ui.screens.ArtistDetailViewModel
@@ -119,6 +120,10 @@ val appModule = module {
 
     viewModel {
         LyricsViewModel(repository = get())
+    }
+
+    viewModel {
+        RatingViewModel(repository = get())
     }
 
     viewModel {

@@ -53,6 +53,7 @@ import coil.compose.AsyncImage
 import com.substream.data.api.AlbumDetail
 import com.substream.data.api.Song
 import com.substream.ui.components.AddToPlaylistSheet
+import com.substream.ui.components.RatingBar
 import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
@@ -141,6 +142,7 @@ fun AlbumDetailScreen(
                         },
                         onArtistClick = onArtistClick,
                         onToggleStarAlbum = { albumDetail -> viewModel.toggleStarAlbum(albumDetail) },
+                        onRate = { albumDetail, rating -> viewModel.rateAlbum(albumDetail, rating) },
                         onToggleStarSong = { song -> viewModel.toggleStarSong(song) },
                         onAddToPlaylist = { song -> addingToPlaylist = song }
                     )
@@ -164,6 +166,7 @@ private fun AlbumDetailContent(
     onSongClick: (Song) -> Unit,
     onArtistClick: (String, String) -> Unit,
     onToggleStarAlbum: (AlbumDetail) -> Unit,
+    onRate: (AlbumDetail, Int) -> Unit,
     onToggleStarSong: (Song) -> Unit,
     onAddToPlaylist: (Song) -> Unit,
     modifier: Modifier = Modifier,
@@ -177,7 +180,8 @@ private fun AlbumDetailContent(
                 albumDetail = albumDetail,
                 coverArtUrl = getCoverArtUrl(albumDetail.coverArt),
                 onArtistClick = onArtistClick,
-                onToggleStarAlbum = { onToggleStarAlbum(albumDetail) }
+                onToggleStarAlbum = { onToggleStarAlbum(albumDetail) },
+                onRate = onRate,
             )
         }
 
@@ -224,6 +228,7 @@ private fun AlbumHeader(
     coverArtUrl: String?,
     onArtistClick: (String, String) -> Unit,
     onToggleStarAlbum: () -> Unit,
+    onRate: (AlbumDetail, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -304,6 +309,13 @@ private fun AlbumHeader(
                 textAlign = TextAlign.Center
             )
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RatingBar(
+            rating = albumDetail.userRating,
+            onRate = { rating -> onRate(albumDetail, rating) },
+        )
     }
 }
 

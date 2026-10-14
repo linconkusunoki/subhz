@@ -115,6 +115,24 @@ class ArtistDetailViewModel(
     /**
      * Toggles star/favorite state for the artist.
      */
+    /**
+     * Rates the artist 0-5 and writes it into the loaded copy so the stars move without a refetch.
+     */
+    fun rateArtist(artistDetail: ArtistDetail, rating: Int) {
+        viewModelScope.launch {
+            repository.setRating(id = artistDetail.id, rating = rating).onSuccess { newRating ->
+                val current = _uiState.value
+                if (current is ArtistDetailState.Success) {
+                    _uiState.value = current.copy(
+                        artistDetail = current.artistDetail.copy(
+                            userRating = newRating.takeIf { it > 0 }
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     fun toggleStarArtist(artistDetail: ArtistDetail) {
         viewModelScope.launch {
             val result = repository.toggleStar(
