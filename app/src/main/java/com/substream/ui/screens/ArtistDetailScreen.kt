@@ -71,8 +71,9 @@ import org.koin.compose.koinInject
 /**
  * Artist Detail Screen: artwork, name and star action over two tabs of content.
  *
- * getArtist.view returns albums only, so the songs tab triggers a second request the first time
- * it is opened (see [ArtistDetailViewModel.loadSongsIfNeeded]).
+ * getArtist.view returns albums only, so the songs cost a second search call. It is made as part
+ * of loading the artist rather than when the Songs tab is opened, because the header's Play all
+ * and Shuffle buttons are above the tabs and apply to the whole artist.
  *
  * @param artistId The ID of the artist to load.
  * @param onBackClick Optional callback for back navigation.
@@ -145,7 +146,6 @@ fun ArtistDetailScreen(
                     ArtistDetailContent(
                         artistDetail = state.artistDetail,
                         songsState = state.songs,
-                        onLoadSongs = viewModel::loadSongsIfNeeded,
                         getCoverArtUrl = viewModel::getCoverArtUrl,
                         onAlbumClick = onAlbumClick,
                         onSongClick = { song ->
@@ -184,7 +184,6 @@ private enum class ArtistTab(val label: String) {
 private fun ArtistDetailContent(
     artistDetail: ArtistDetail,
     songsState: LoadState<Song>,
-    onLoadSongs: () -> Unit,
     getCoverArtUrl: (String?) -> String?,
     onAlbumClick: (Album) -> Unit,
     onSongClick: (Song) -> Unit,
@@ -197,14 +196,6 @@ private fun ArtistDetailContent(
     var selectedTab by remember { mutableIntStateOf(0) }
     val songs = (songsState as? LoadState.Success)?.items.orEmpty()
 
-    // Fetch on first visit to the Songs tab rather than on screen entry. Declared here, not
-    // inside the LazyColumn block, because that scope is not a composable one.
-    LaunchedEffect(selectedTab, songsState) {
-        if (selectedTab == ArtistTab.Songs.ordinal && songsState is LoadState.Idle) {
-            onLoadSongs()
-        }
-    }
-
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
         modifier = modifier.fillMaxSize()
@@ -216,7 +207,7 @@ private fun ArtistDetailContent(
                 onToggleStarArtist = onToggleStarArtist,
                 onPlayAll = { onPlayAll(songs) },
                 onShuffleAll = { onShuffleAll(songs) },
-                songsLoaded = songsState !is LoadState.Loading,
+                songsLoaded = songsState is LoadState.Success && songs.isNotEmpty(),
             )
         }
 
@@ -419,8 +410,8 @@ private fun ArtistHeader(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-        // The songs arrive lazily, so before them there is nothing to play and the buttons
-        // stay disabled rather than silently starting an empty queue.
+        // Disabled until the tracklist is in: playing an empty list is a silent no-op, so the buttons
+        // wait for real songs rather than appearing to start something.
         Spacer(modifier = Modifier.height(16.dp))
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),

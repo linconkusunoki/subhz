@@ -18,9 +18,10 @@ import kotlinx.coroutines.launch
 /**
  * Represents the distinct states the Artist Detail Screen can be in.
  *
- * [Success.songs] is a [LoadState] of its own because the tracklist is fetched lazily, the first
- * time the Songs tab is opened: getArtist.view returns albums only, so the songs cost a second
- * search call that most visits to this screen never need.
+ * [Success.songs] is a [LoadState] of its own because it costs a second search call that
+ * getArtist.view does not make: getArtist.view returns albums only, and the songs have to be
+ * searched for by name. It resolves after the artist detail, so the screen can render the albums
+ * while the tracklist is still on its way.
  */
 sealed class ArtistDetailState {
     object Idle : ArtistDetailState()
@@ -48,9 +49,9 @@ class ArtistDetailViewModel(
     private val _uiState = MutableStateFlow<ArtistDetailState>(ArtistDetailState.Idle)
     val uiState: StateFlow<ArtistDetailState> = _uiState.asStateFlow()
 
-    // The artist whose songs are cached in [ArtistDetailState.Success.songs], so switching tabs
-    // back and forth refetches nothing. Reset by [loadArtist] when a different artist is opened.
-    private var songsArtistId: String? = null
+    // The init block below and the screen's LaunchedEffect both load on first open, so this guard
+    // is what keeps that from fetching the artist and its songs twice.
+    private var loadedArtistId: String? = null
 
     init {
         val initialArtistId: String? = savedStateHandle?.get("artistId")
@@ -60,18 +61,33 @@ class ArtistDetailViewModel(
     }
 
     /**
-     * Loads an artist and their albums.
+     * Loads an artist with their albums and songs.
+     *
+     * The songs are part of this load rather than fetched when the Songs tab is opened: the
+     * header's Play all and Shuffle buttons sit above the tabs and apply to the whole artist, so
+     * they have to work from the Albums tab too.
      */
     fun loadArtist(artistId: String) {
-        songsArtistId = null
+        if (artistId.isEmpty() || loadedArtistId == artistId) return
+        loadedArtistId = artistId
         _uiState.value = ArtistDetailState.Loading
 
         viewModelScope.launch {
             repository.getArtistDetails(artistId).fold(
                 onSuccess = { detail ->
-                    _uiState.value = ArtistDetailState.Success(detail)
+                    // Published before the songs resolve: the albums are worth showing straight
+                    // away, and the header's controls wait on [Success.songs] regardless.
+                    _uiState.value = ArtistDetailState.Success(detail, songs = LoadState.Loading)
+
+                    val songs = fetchSongs(detail)
+                    val latest = _uiState.value
+                    if (latest is ArtistDetailState.Success && latest.artistDetail.id == detail.id) {
+                        _uiState.value = latest.copy(songs = songs)
+                    }
                 },
                 onFailure = { error ->
+                    // Cleared so the screen's retry button actually refetches.
+                    loadedArtistId = null
                     _uiState.value = ArtistDetailState.Error(
                         error.message ?: "Failed to load artist details"
                     )
@@ -81,34 +97,19 @@ class ArtistDetailViewModel(
     }
 
     /**
-     * Loads the artist's songs, but only the first time: after that the list lives in the UI
-     * state and every later call is a no-op, so rotating or re-entering the Songs tab is free.
+     * Fetches an artist's songs.
+     *
+     * A failure is not an error state worth shouting about: an artist whose songs the server
+     * cannot match by name simply shows as an empty tracklist.
      */
-    fun loadSongsIfNeeded() {
-        val current = _uiState.value as? ArtistDetailState.Success ?: return
-        if (songsArtistId == current.artistDetail.id) return
-
-        songsArtistId = current.artistDetail.id
-        _uiState.value = current.copy(songs = LoadState.Loading)
-
-        viewModelScope.launch {
-            val result = repository.getArtistSongs(
-                artistId = current.artistDetail.id,
-                artistName = current.artistDetail.name,
-            )
-            val latest = _uiState.value
-            if (latest !is ArtistDetailState.Success) return@launch
-
-            _uiState.value = latest.copy(
-                songs = result.fold(
-                    onSuccess = { LoadState.Success(it) },
-                    // Not an error state worth shouting about: an artist whose songs the server
-                    // cannot match by name simply shows as empty.
-                    onFailure = { LoadState.Success(emptyList()) },
-                )
-            )
-        }
-    }
+    private suspend fun fetchSongs(artistDetail: ArtistDetail): LoadState<Song> =
+        repository.getArtistSongs(
+            artistId = artistDetail.id,
+            artistName = artistDetail.name,
+        ).fold(
+            onSuccess = { LoadState.Success(it) },
+            onFailure = { LoadState.Success(emptyList()) },
+        )
 
     /**
      * Toggles star/favorite state for the artist.
