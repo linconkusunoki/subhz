@@ -26,8 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.substream.data.api.Album
+import com.substream.player.PlayerManager
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 /**
  * Library hub: the bottom-nav "Library" destination with an internal tab bar
@@ -38,12 +40,14 @@ import org.koin.androidx.compose.koinViewModel
 fun LibraryScreen(
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (String, String) -> Unit = { _, _ -> },
-    viewModel: LibraryViewModel = koinViewModel()
+    viewModel: LibraryViewModel = koinViewModel(),
+    playerManager: PlayerManager = koinInject(),
 ) {
     val artistsState by viewModel.artists.collectAsState()
     val playlistsState by viewModel.playlists.collectAsState()
     val starredState by viewModel.starred.collectAsState()
     val starredArtistsState by viewModel.starredArtists.collectAsState()
+    val starredSongsState by viewModel.starredSongs.collectAsState()
 
     // The pager is the single source of truth for the selected tab: tab clicks animate
     // the page and swipes move the selection, so the two can never disagree.
@@ -125,11 +129,17 @@ fun LibraryScreen(
                 LibraryTab.Favorites -> FavoritesScreen(
                     state = starredState,
                     artistsState = starredArtistsState,
+                    songsState = starredSongsState,
                     onRetry = viewModel::loadStarred,
                     onRemove = viewModel::removeStarred,
                     onToggleStarArtist = viewModel::toggleStarredArtist,
+                    onToggleStarSong = viewModel::removeStarredSong,
                     onAlbumClick = onAlbumClick,
                     onArtistClick = onArtistClick,
+                    onSongClick = { song ->
+                        val songs = (starredSongsState as? LoadState.Success)?.items.orEmpty()
+                        playerManager.playSongs(songs, songs.indexOf(song).coerceAtLeast(0))
+                    },
                     getCoverArtUrl = viewModel::getCoverArtUrl,
                 )
             }

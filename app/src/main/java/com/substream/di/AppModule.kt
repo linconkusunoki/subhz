@@ -7,6 +7,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import com.substream.data.api.ApiClientFactory
+import com.substream.data.api.ServerCapabilities
 import com.substream.data.preferences.ServerPreferences
 import com.substream.data.repository.SubsonicRepository
 import com.substream.player.PlayerManager
@@ -40,6 +41,11 @@ val appModule = module {
     // 2. The get() function magically finds the dependency needed
     single {
         SubsonicRepository(api = get(), serverPreferences = get())
+    }
+
+    // Which OpenSubsonic extensions the signed-in server implements.
+    single {
+        ServerCapabilities(api = get(), serverPreferences = get())
     }
 
     // 3. Media Cache Manager & DataSource Factory (Singleton instance)

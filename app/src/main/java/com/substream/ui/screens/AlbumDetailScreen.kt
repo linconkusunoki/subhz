@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.substream.data.api.AlbumDetail
 import com.substream.data.api.Song
+import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -346,7 +347,7 @@ private fun SongRowItem(
 
         // Formatted Duration (mm:ss)
         Text(
-            text = formatDuration(song.duration),
+            text = formatSongDuration(song.duration),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -366,12 +367,3 @@ private fun SongRowItem(
 // 5. HELPER FUNCTIONS & ERROR UI
 // =====================================================================
 
-/**
- * Helper function to format duration in seconds to "mm:ss" format.
- */
-private fun formatDuration(seconds: Int?): String {
-    if (seconds == null || seconds <= 0) return "--:--"
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format(Locale.getDefault(), "%02d:%02d", minutes, remainingSeconds)
-}

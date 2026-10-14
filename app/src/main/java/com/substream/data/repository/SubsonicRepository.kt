@@ -8,6 +8,7 @@ import com.substream.data.api.Playlist
 import com.substream.data.api.SearchResult
 import com.substream.data.api.SearchResult3
 import com.substream.data.api.Song
+import com.substream.data.api.StarredContainer
 import com.substream.data.api.SubsonicApiService
 import com.substream.data.api.SubsonicPingData
 import com.substream.data.preferences.ServerPreferences
@@ -163,18 +164,11 @@ class SubsonicRepository(
     }
 
     /**
-     * Fetches starred (favorite) albums via getStarred2.view.
+     * Fetches everything starred via getStarred2.view: the albums, the artists and the songs all
+     * come in one response, so a screen that wants more than one of them asks once.
      */
-    suspend fun getStarredAlbums(): Result<List<Album>> = call {
-        api.getStarred().subsonicResponse.starred2?.album.orEmpty()
-    }
-
-    /**
-     * Fetches starred (favorite) artists via getStarred2.view, which returns them in the same
-     * response as the starred albums and songs.
-     */
-    suspend fun getStarredArtists(): Result<List<Artist>> = call {
-        api.getStarred().subsonicResponse.starred2?.artist.orEmpty()
+    suspend fun getStarred(): Result<StarredContainer> = call {
+        api.getStarred().subsonicResponse.starred2 ?: StarredContainer()
     }
 
     /**

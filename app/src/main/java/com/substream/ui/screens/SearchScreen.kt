@@ -59,6 +59,7 @@ import com.substream.data.api.Album
 import com.substream.data.api.Artist
 import com.substream.data.api.SearchResult
 import com.substream.data.api.Song
+import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -422,7 +423,7 @@ private fun SearchSongRowItem(
 
         // Song Duration
         Text(
-            text = formatDuration(song.duration),
+            text = formatSongDuration(song.duration),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
@@ -456,11 +457,4 @@ private fun EmptySectionText(message: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
-}
-
-private fun formatDuration(seconds: Int?): String {
-    if (seconds == null || seconds <= 0) return "--:--"
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format(Locale.getDefault(), "%02d:%02d", minutes, remainingSeconds)
 }

@@ -60,6 +60,7 @@ import coil.compose.AsyncImage
 import com.substream.data.api.Album
 import com.substream.data.api.ArtistDetail
 import com.substream.data.api.Song
+import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -603,15 +604,4 @@ private fun EmptyArtistTab(message: String, modifier: Modifier = Modifier) {
             CircularProgressIndicator()
         }
     }
-}
-
-/**
- * Formats a song duration in seconds to "mm:ss". A third copy of this: the two in AlbumDetailScreen
- * and SearchScreen are file-private, so sharing one means making it public for a five-line function.
- */
-private fun formatSongDuration(seconds: Int?): String {
-    if (seconds == null || seconds <= 0) return "--:--"
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, remainingSeconds)
 }

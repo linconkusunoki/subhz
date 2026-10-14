@@ -25,7 +25,18 @@ data class SubsonicResponse(
     val artists: ArtistsContainer? = null,
     val playlists: PlaylistsContainer? = null,
     val starred2: StarredContainer? = null,
+    val openSubsonicExtensions: List<OpenSubsonicExtension>? = null,
     val error: SubsonicError? = null
+)
+
+/**
+ * One entry of getOpenSubsonicExtensions.view. The server lists every extension it implements, so
+ * the client can offer a feature only where it exists rather than failing the call and guessing.
+ */
+@Serializable
+data class OpenSubsonicExtension(
+    val name: String,
+    val versions: List<Int> = emptyList()
 )
 
 /** Subsonic replies with HTTP 200 and status="failed" when credentials are rejected. */
@@ -234,6 +245,19 @@ interface SubsonicApiService {
 
     @GET("rest/getStarred2.view")
     suspend fun getStarred(
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Lists the OpenSubsonic extensions this server implements, each with the versions it speaks.
+     *
+     * The call is public on purpose: the spec requires it to work without credentials, so the app
+     * can read a server's capabilities before it has any.
+     */
+    @GET("rest/getOpenSubsonicExtensions.view")
+    suspend fun getOpenSubsonicExtensions(
         @Query("v") version: String = "1.16.1",
         @Query("c") client: String = "SubStream",
         @Query("f") format: String = "json"

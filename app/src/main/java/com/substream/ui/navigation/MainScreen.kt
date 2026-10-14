@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.substream.data.api.ServerCapabilities
 import com.substream.data.preferences.ServerPreferences
 import com.substream.player.PlayerManager
 import com.substream.ui.components.PlayerBar
@@ -58,8 +60,15 @@ import org.koin.compose.koinInject
 @Composable
 fun MainScreen(
     serverPreferences: ServerPreferences = koinInject(),
+    serverCapabilities: ServerCapabilities = koinInject(),
 ) {
     val config by serverPreferences.config.collectAsState()
+
+    // Once per signed-in server, and re-read whenever the credentials change: what the app offers
+    // depends on what the server implements.
+    LaunchedEffect(config?.url) {
+        serverCapabilities.refresh()
+    }
 
     if (config == null) {
         LoginScreen()

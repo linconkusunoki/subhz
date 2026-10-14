@@ -65,18 +65,19 @@ class HomeViewModel(
                 val recent = async { repository.getAlbums(type = "newest", size = SHELF_SIZE) }
                 val frequent = async { repository.getAlbums(type = "frequent", size = SHELF_SIZE) }
                 val random = async { repository.getAlbums(type = "random", size = SHELF_SIZE) }
-                val favorites = async { repository.getStarredAlbums() }
-                val favoriteArtists = async { repository.getStarredArtists() }
+                // One getStarred2 call: the albums, the artists and the songs all arrive in it.
+                val starred = async { repository.getStarred() }
 
+                val starredContent = starred.await().getOrThrow()
                 _uiState.value = HomeState.Success(
                     HomeData(
                         recentlyAdded = recent.await().getOrThrow().withImage(),
                         frequentlyPlayed = frequent.await().getOrThrow().withImage(),
                         madeForYou = random.await().getOrThrow().withImage(),
-                        favorites = favorites.await().getOrThrow().withImage(),
+                        favorites = starredContent.album.withImage(),
                         // The grid at the top of the home is the starred artists. All of them are
                         // loaded: the row scrolls, and the screen fits six at a time.
-                        favoriteArtists = favoriteArtists.await().getOrThrow().withArtistImage(),
+                        favoriteArtists = starredContent.artist.withArtistImage(),
                     )
                 )
             } catch (e: Exception) {

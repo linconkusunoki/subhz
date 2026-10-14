@@ -16,15 +16,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.substream.data.api.Album
 import com.substream.data.api.Artist
+import com.substream.data.api.Song
+import com.substream.ui.components.SongsList
 
 /** Sub-tabs of the Favorites hub. */
 private enum class FavoriteTab(val label: String) {
     Albums("Albums"),
     Artists("Artists"),
+    Songs("Songs"),
 }
 
 /**
- * Starred albums and artists served by getStarred2.view.
+ * Starred albums, artists and songs served by getStarred2.view.
  * Rendered inside LibraryScreen, so it has no TopAppBar of its own.
  *
  * Two tabs rather than one long list: two lazy grids stacked in a Column would need measured
@@ -34,11 +37,14 @@ private enum class FavoriteTab(val label: String) {
 fun FavoritesScreen(
     state: LoadState<Album>,
     artistsState: LoadState<Artist>,
+    songsState: LoadState<Song>,
     onRetry: () -> Unit,
     onRemove: (Album) -> Unit,
     onToggleStarArtist: (Artist) -> Unit,
+    onToggleStarSong: (Song) -> Unit,
     onAlbumClick: (Album) -> Unit,
     onArtistClick: (String, String) -> Unit,
+    onSongClick: (Song) -> Unit,
     getCoverArtUrl: (String?) -> String?,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -81,6 +87,19 @@ fun FavoritesScreen(
                         onArtistClick = { artist -> onArtistClick(artist.id, artist.name) },
                         onToggleStar = onToggleStarArtist,
                         getCoverArtUrl = getCoverArtUrl,
+                    )
+                }
+
+                FavoriteTab.Songs -> LoadStateContent(
+                    state = songsState,
+                    emptyMessage = "Your favorite songs will show up here.",
+                    onRetry = onRetry,
+                ) { songs ->
+                    SongsList(
+                        songs = songs,
+                        onSongClick = onSongClick,
+                        getCoverArtUrl = getCoverArtUrl,
+                        onToggleStar = onToggleStarSong,
                     )
                 }
             }
