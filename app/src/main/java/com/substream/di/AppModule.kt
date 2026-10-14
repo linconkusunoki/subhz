@@ -16,6 +16,7 @@ import com.substream.data.repository.SubsonicRepository
 import com.substream.player.PlayerManager
 import com.substream.player.cache.MediaCacheManager
 import com.substream.ui.components.AddToPlaylistViewModel
+import com.substream.ui.components.LyricsViewModel
 import com.substream.ui.screens.AlbumDetailViewModel
 import com.substream.ui.screens.AlbumsViewModel
 import com.substream.ui.screens.ArtistDetailViewModel
@@ -114,6 +115,10 @@ val appModule = module {
 
     viewModel {
         AddToPlaylistViewModel(repository = get())
+    }
+
+    viewModel {
+        LyricsViewModel(repository = get())
     }
 
     viewModel {

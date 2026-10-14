@@ -31,6 +31,8 @@ data class SubsonicResponse(
     val starred2: StarredContainer? = null,
     val openSubsonicExtensions: List<OpenSubsonicExtension>? = null,
     val playQueue: PlayQueue? = null,
+    val lyricsList: LyricsList? = null,
+    val lyrics: Lyrics? = null,
     val error: SubsonicError? = null
 )
 
@@ -93,6 +95,42 @@ data class Playlist(
 ) {
     val isStarred: Boolean get() = starred != null
 }
+
+/**
+ * Lyrics by song id, the songLyrics extension. Navidrome answers with the lyrics embedded in the
+ * file and any sidecar file next to it, and a plugin can add fetched ones.
+ *
+ * [StructuredLyrics.offset] shifts every line by a constant in milliseconds, which is how a file
+ * records that its timings are late.
+ */
+@Serializable
+data class LyricsList(
+    val structuredLyrics: List<StructuredLyrics> = emptyList()
+)
+
+@Serializable
+data class StructuredLyrics(
+    val displayArtist: String? = null,
+    val displayTitle: String? = null,
+    val lang: String? = null,
+    val offset: Long? = null,
+    val synced: Boolean = false,
+    val line: List<LyricsLine> = emptyList()
+)
+
+@Serializable
+data class LyricsLine(
+    val start: Long? = null,
+    val value: String = ""
+)
+
+/** The original getLyrics.view answer: one blob of text for an artist and title. */
+@Serializable
+data class Lyrics(
+    val artist: String? = null,
+    val title: String? = null,
+    val value: String? = null
+)
 
 /**
  * The queue the server holds for this user, from getPlayQueue.view.
@@ -291,6 +329,32 @@ interface SubsonicApiService {
     @GET("rest/deletePlaylist.view")
     suspend fun deletePlaylist(
         @Query("id") playlistId: String,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Lyrics for one song by id (the songLyrics extension). `enhanced` asks for the structured
+     * form rather than the flat one, which is the whole point of asking this endpoint at all.
+     */
+    @GET("rest/getLyricsBySongId.view")
+    suspend fun getLyricsBySongId(
+        @Query("id") songId: String,
+        @Query("enhanced") enhanced: Boolean = true,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Lyrics by artist and title, the pre-extension call. Kept as the fallback: servers that carry
+     * plain lyrics answer this one, and some do not route the newer endpoint at all.
+     */
+    @GET("rest/getLyrics.view")
+    suspend fun getLyrics(
+        @Query("artist") artist: String,
+        @Query("title") title: String,
         @Query("v") version: String = "1.16.1",
         @Query("c") client: String = "SubStream",
         @Query("f") format: String = "json"

@@ -43,6 +43,21 @@ internal suspend fun mainArtistIds(fetchPage: suspend (offset: Int) -> List<Albu
 }
 
 /**
+ * Lyrics for a track, in whichever form the server had them.
+ */
+sealed interface SongLyrics {
+    /** Timed lines: [SongLyricLine.timeMs] is when the line starts, already offset corrected. */
+    data class Synced(val lines: List<SongLyricLine>) : SongLyrics
+
+    /** Untimed text, from the old endpoint. */
+    data class Plain(val text: String) : SongLyrics
+
+    data object None : SongLyrics
+}
+
+data class SongLyricLine(val timeMs: Long, val text: String)
+
+/**
  * A listening position as the server stored it: the tracks, which one was current, and how far in.
  */
 data class SavedQueue(
@@ -175,6 +190,41 @@ class SubsonicRepository(
      */
     suspend fun getPlaylists(): Result<List<Playlist>> = call {
         api.getPlaylists().subsonicResponse.playlists?.playlist.orEmpty()
+    }
+
+    /**
+     * Reads the lyrics for a track, preferring the timed form.
+     *
+     * The by-id call only exists where the server implements the songLyrics extension, so the
+     * artist and title call is the fallback rather than an extra: it is the one every server has,
+     * and it is what returns the plain text when there is no timing to be had.
+     */
+    suspend fun getSongLyrics(song: Song): Result<SongLyrics> = call {
+        val structured = runCatching {
+            api.getLyricsBySongId(songId = song.id).subsonicResponse.lyricsList
+        }.getOrNull()
+
+        val timed = structured?.structuredLyrics?.firstOrNull { lyrics -> lyrics.synced }
+        if (timed != null) {
+            val offset = timed.offset ?: 0L
+            val lines = timed.line
+                .filter { line -> line.start != null }
+                .map { line -> SongLyricLine(timeMs = line.start!! + offset, text = line.value) }
+            if (lines.isNotEmpty()) return@call SongLyrics.Synced(lines)
+        }
+
+        // Unsynced lines are still better than nothing, and cheaper than a second request.
+        val plainFromExtension = structured?.structuredLyrics
+            ?.flatMap { lyrics -> lyrics.line }
+            ?.joinToString("\n") { line -> line.value }
+            ?.trim()
+        if (!plainFromExtension.isNullOrEmpty()) return@call SongLyrics.Plain(plainFromExtension)
+
+        val legacy = runCatching {
+            api.getLyrics(artist = song.artist.orEmpty(), title = song.title).subsonicResponse.lyrics
+        }.getOrNull()?.value?.trim()
+
+        if (legacy.isNullOrEmpty()) SongLyrics.None else SongLyrics.Plain(legacy)
     }
 
     /**

@@ -16,7 +16,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
+import com.substream.ui.components.LyricsPanel
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -45,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +81,10 @@ fun NowPlayingScreen(
     val playerState by playerManager.playerState.collectAsState()
     val currentSong = playerState.currentSong
 
+    // Lyrics stand in for the artwork rather than sitting under it, so only one of the two is ever
+    // on screen and the controls below stay where the thumb is.
+    var showingLyrics by rememberSaveable { mutableStateOf(false) }
+
     // Automatically dismiss full screen if no song is currently playing or loaded
     LaunchedEffect(currentSong) {
         if (currentSong == null) {
@@ -103,6 +111,20 @@ fun NowPlayingScreen(
                         )
                     }
                 },
+                actions = {
+                    if (currentSong != null) {
+                        IconButton(onClick = { showingLyrics = !showingLyrics }) {
+                            Icon(
+                                imageVector = if (showingLyrics) {
+                                    Icons.Default.Album
+                                } else {
+                                    Icons.Default.Lyrics
+                                },
+                                contentDescription = if (showingLyrics) "Show artwork" else "Show lyrics",
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -119,10 +141,19 @@ fun NowPlayingScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Adaptive High-Resolution Album Cover Art.
+                // 1. Adaptive High-Resolution Album Cover Art, or the lyrics in its place.
                 // Sized off the width alone, never off the leftover height: the sheet re-measures
                 // its content while it settles, and an artwork that depends on the remaining space
                 // visibly resizes mid-animation. Width is fixed for the whole animation.
+                if (showingLyrics) {
+                    LyricsPanel(
+                        song = currentSong,
+                        positionMs = playerState.currentPositionMs,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                    )
+                } else {
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -170,6 +201,8 @@ fun NowPlayingScreen(
                             }
                         }
                     }
+                }
+
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
