@@ -32,6 +32,7 @@ data class HomeData(
     val madeForYou: List<Album> = emptyList(),
     val favorites: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
+    val favoriteArtists: List<Artist> = emptyList(),
 )
 
 /**
@@ -71,6 +72,7 @@ class HomeViewModel(
                 val random = async { repository.getAlbums(type = "random", size = SHELF_SIZE) }
                 val favorites = async { repository.getStarredAlbums() }
                 val artists = async { repository.getArtists() }
+                val favoriteArtists = async { repository.getStarredArtists() }
 
                 _uiState.value = HomeState.Success(
                     HomeData(
@@ -86,7 +88,8 @@ class HomeViewModel(
                                 compareByDescending<Artist> { it.albumCount ?: 0 }
                                     .thenBy { it.name.lowercase() }
                             )
-                            .take(QUICK_PICK_COUNT)
+                            .take(QUICK_PICK_COUNT),
+                        favoriteArtists = favoriteArtists.await().getOrThrow().withArtistImage(),
                     )
                 )
             } catch (e: Exception) {
@@ -123,6 +126,34 @@ class HomeViewModel(
 
     private fun List<Album>.replace(album: Album): List<Album> =
         map { if (it.id == album.id) album else it }
+
+    /**
+     * Toggles an artist's starred state and reflects it in both the favorite artists shelf and
+     * the quick picks, so the same artist cannot show a filled star in one row and an outline in
+     * the other.
+     */
+    fun toggleStarArtist(artist: Artist) {
+        viewModelScope.launch {
+            repository.toggleStar(id = artist.id, isStarred = artist.isStarred, isArtist = true)
+                .onSuccess { newStarred ->
+                    val current = _uiState.value as? HomeState.Success ?: return@onSuccess
+                    val starred = artist.copy(starred = if (newStarred) "starred" else null)
+                    _uiState.value = HomeState.Success(
+                        current.data.copy(
+                            artists = current.data.artists.replace(starred),
+                            favoriteArtists = if (newStarred) {
+                                (current.data.favoriteArtists + starred).distinctBy { it.id }
+                            } else {
+                                current.data.favoriteArtists.filterNot { it.id == artist.id }
+                            }
+                        )
+                    )
+                }
+        }
+    }
+
+    private fun List<Artist>.replace(artist: Artist): List<Artist> =
+        map { if (it.id == artist.id) artist else it }
 
     /**
      * Generates a full authenticated cover art URL for a given coverArt ID, asking the server

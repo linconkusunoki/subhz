@@ -47,7 +47,8 @@ import java.util.Calendar
 
 /**
  * Spotify-shaped home: a greeting, a quick-pick grid of artists and horizontal shelves of
- * albums fed by getAlbumList2 (newest / frequent / random), getStarred2 and getArtists.
+ * albums fed by getAlbumList2 (newest / frequent / random), getStarred2 and getArtists, closing
+ * on a shelf of the artists you have starred.
  *
  * The main Scaffold already owns the window insets, same as every other destination.
  */
@@ -89,6 +90,7 @@ fun HomeScreen(
                     onArtistClick = onArtistClick,
                     onSearchClick = onSearchClick,
                     onToggleStar = viewModel::toggleStarAlbum,
+                    onToggleStarArtist = viewModel::toggleStarArtist,
                     getCoverArtUrl = viewModel::getCoverArtUrl,
                 )
             }
@@ -103,6 +105,7 @@ private fun HomeContent(
     onArtistClick: (String, String) -> Unit,
     onSearchClick: () -> Unit,
     onToggleStar: (Album) -> Unit,
+    onToggleStarArtist: (Artist) -> Unit,
     getCoverArtUrl: (String?) -> String?,
 ) {
     val shelves = listOf(
@@ -111,7 +114,7 @@ private fun HomeContent(
         "Made for you" to data.madeForYou,
         "Your favorites" to data.favorites,
     )
-    if (data.artists.isEmpty() && shelves.all { it.second.isEmpty() }) {
+    if (data.artists.isEmpty() && data.favoriteArtists.isEmpty() && shelves.all { it.second.isEmpty() }) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = "Nothing to show yet.",
@@ -171,6 +174,24 @@ private fun HomeContent(
                             onToggleStar = { onToggleStar(album) },
                         )
                     }
+                }
+            }
+        }
+
+        // Sits under the favorite albums so the two favorite shelves read as one section.
+        if (data.favoriteArtists.isNotEmpty()) {
+            item(key = "Favorite artists") {
+                ShelfRow(
+                    title = "Favorite artists",
+                    items = data.favoriteArtists,
+                    key = { it.id },
+                ) { artist ->
+                    ArtistCard(
+                        artist = artist,
+                        coverArtUrl = getCoverArtUrl(artist.coverArt),
+                        onClick = { onArtistClick(artist.id, artist.name) },
+                        onToggleStar = { onToggleStarArtist(artist) },
+                    )
                 }
             }
         }
