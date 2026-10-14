@@ -20,8 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +56,7 @@ import com.substream.data.api.Album
 import com.substream.data.api.Artist
 import com.substream.data.api.SearchResult
 import com.substream.data.api.Song
+import com.substream.ui.components.FavoriteIcon
 import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
@@ -430,11 +428,7 @@ private fun SearchSongRowItem(
 
         // Favorite Star Button
         IconButton(onClick = onToggleStar) {
-            Icon(
-                imageVector = if (song.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = if (song.isStarred) "Unfavorite" else "Favorite",
-                tint = if (song.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            FavoriteIcon(filled = song.isStarred, unfilledTint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

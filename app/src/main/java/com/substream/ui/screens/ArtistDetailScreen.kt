@@ -25,8 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -50,15 +48,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.substream.ui.components.FavoriteIcon
 import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
 import com.substream.data.api.ArtistDetail
@@ -367,11 +366,7 @@ private fun ArtistHeader(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                 ) {
-                    Icon(
-                        imageVector = if (artistDetail.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (artistDetail.isStarred) "Unfavorite" else "Favorite",
-                        tint = if (artistDetail.isStarred) Color(0xFFFFC107) else Color.White
-                    )
+                    FavoriteIcon(filled = artistDetail.isStarred, unfilledTint = Color.White)
                 }
 
                 val albumCount = artistDetail.albumCount ?: artistDetail.album.size
@@ -597,11 +592,7 @@ private fun ArtistSongRow(
         )
 
         IconButton(onClick = onToggleStarSong) {
-            Icon(
-                imageVector = if (song.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = if (song.isStarred) "Unfavorite" else "Favorite",
-                tint = if (song.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            FavoriteIcon(filled = song.isStarred, unfilledTint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

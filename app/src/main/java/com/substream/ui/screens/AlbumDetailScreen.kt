@@ -20,8 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,8 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.substream.data.api.AlbumDetail
 import com.substream.data.api.Song
+import com.substream.ui.components.FavoriteIcon
 import com.substream.ui.components.AddToPlaylistSheet
 import com.substream.ui.components.RatingBar
 import com.substream.ui.components.formatSongDuration
@@ -254,11 +253,7 @@ private fun AlbumHeader(
                 onClick = onToggleStarAlbum,
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Icon(
-                    imageVector = if (albumDetail.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                    contentDescription = if (albumDetail.isStarred) "Unfavorite" else "Favorite",
-                    tint = if (albumDetail.isStarred) Color(0xFFFFC107) else Color.White
-                )
+                FavoriteIcon(filled = albumDetail.isStarred, unfilledTint = Color.White)
             }
         }
 
@@ -384,11 +379,7 @@ private fun SongRowItem(
 
         // Favorite Star Button for Song
         IconButton(onClick = onToggleStarSong) {
-            Icon(
-                imageVector = if (song.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = if (song.isStarred) "Unfavorite" else "Favorite",
-                tint = if (song.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            FavoriteIcon(filled = song.isStarred, unfilledTint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

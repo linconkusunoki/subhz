@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,14 +40,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.substream.ui.components.FavoriteIcon
 import com.substream.data.api.Album
 import org.koin.androidx.compose.koinViewModel
 
@@ -247,11 +246,7 @@ fun AlbumRow(
 
         if (onToggleStar != null) {
             IconButton(onClick = onToggleStar) {
-                Icon(
-                    imageVector = if (album.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                    contentDescription = if (album.isStarred) "Unfavorite" else "Favorite",
-                    tint = if (album.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                FavoriteIcon(filled = album.isStarred)
             }
         }
     }
@@ -302,11 +297,7 @@ fun AlbumCard(
                     onClick = onToggleStar,
                     modifier = Modifier.align(Alignment.TopEnd)
                 ) {
-                    Icon(
-                        imageVector = if (album.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (album.isStarred) "Unfavorite" else "Favorite",
-                        tint = if (album.isStarred) Color(0xFFFFC107) else Color.White
-                    )
+                    FavoriteIcon(filled = album.isStarred, unfilledTint = Color.White)
                 }
 
                 // Play, where a shelf card can act rather than only lead somewhere. Bottom-start so
