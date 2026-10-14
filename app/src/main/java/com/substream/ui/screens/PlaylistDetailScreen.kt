@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -51,7 +52,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.substream.data.api.Playlist
 import com.substream.player.PlayerManager
-import com.substream.ui.components.SongsList
+import com.substream.ui.components.SongRow
 import com.substream.ui.components.formatSongDuration
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -245,14 +246,18 @@ private fun PlaylistContent(
             }
         }
 
-        item(key = "tracks") {
-            SongsList(
-                songs = playlist.entry,
-                // The list is the server's order, so the index the player needs is this song's
-                // place in it rather than a position handed down by the lazy layout.
-                onSongClick = { song -> onPlay(playlist.entry.indexOf(song)) },
-                getCoverArtUrl = getCoverArtUrl,
-                onRemove = { song -> onRemoveTrack(playlist.entry.indexOf(song), song.title) },
+        // The tracks are emitted into this list rather than handed to a nested one: an item of a
+        // LazyColumn is measured with an unbounded height, and a vertically scrollable child given
+        // one is a crash rather than a layout.
+        itemsIndexed(
+            items = playlist.entry,
+            key = { index, song -> "${index}:${song.id}" },
+        ) { index, song ->
+            SongRow(
+                song = song,
+                coverArtUrl = getCoverArtUrl(song.coverArt),
+                onClick = { onPlay(index) },
+                onRemove = { onRemoveTrack(index, song.title) },
             )
         }
     }
