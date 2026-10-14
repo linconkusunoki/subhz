@@ -285,7 +285,7 @@ private fun SearchResultsTabbedContent(
                 if (searchResult.artist.isEmpty()) {
                     EmptySectionText(message = "No artists found.")
                 } else {
-                    ArtistsGrid(
+                    ArtistList(
                         artists = searchResult.artist,
                         onArtistClick = { artist -> onArtistClick(artist.id, artist.name) },
                         onToggleStar = onToggleStarArtist,

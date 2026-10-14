@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 /** How many albums each home shelf asks the server for. */
 private const val SHELF_SIZE = 20
 
-/** How many artists the quick-pick grid shows. */
+/** How many favorite artists the home grid shows. */
 private const val QUICK_PICK_COUNT = 6
 
 /** Pixel size asked of the server for home cover art, matching the 150dp shelf cards. */
@@ -31,7 +31,6 @@ data class HomeData(
     val frequentlyPlayed: List<Album> = emptyList(),
     val madeForYou: List<Album> = emptyList(),
     val favorites: List<Album> = emptyList(),
-    val artists: List<Artist> = emptyList(),
     val favoriteArtists: List<Artist> = emptyList(),
 )
 
@@ -47,8 +46,7 @@ sealed interface HomeState {
 }
 
 /**
- * ViewModel backing the home screen: getAlbumList2 (newest / frequent / random),
- * getStarred2 and getArtists.
+ * ViewModel backing the home screen: getAlbumList2 (newest / frequent / random) and getStarred2.
  */
 class HomeViewModel(
     private val repository: SubsonicRepository
@@ -71,7 +69,6 @@ class HomeViewModel(
                 val frequent = async { repository.getAlbums(type = "frequent", size = SHELF_SIZE) }
                 val random = async { repository.getAlbums(type = "random", size = SHELF_SIZE) }
                 val favorites = async { repository.getStarredAlbums() }
-                val artists = async { repository.getArtists() }
                 val favoriteArtists = async { repository.getStarredArtists() }
 
                 _uiState.value = HomeState.Success(
@@ -80,16 +77,11 @@ class HomeViewModel(
                         frequentlyPlayed = frequent.await().getOrThrow().withImage(),
                         madeForYou = random.await().getOrThrow().withImage(),
                         favorites = favorites.await().getOrThrow().withImage(),
-                        // Servers that do not count albums leave albumCount null, so fall
-                        // back to name order rather than letting the raw API order show.
-                        artists = artists.await().getOrThrow()
+                        // The grid at the top of the home is the starred artists, capped so it
+                        // stays a shortcut row rather than becoming a second artists list.
+                        favoriteArtists = favoriteArtists.await().getOrThrow()
                             .withArtistImage()
-                            .sortedWith(
-                                compareByDescending<Artist> { it.albumCount ?: 0 }
-                                    .thenBy { it.name.lowercase() }
-                            )
                             .take(QUICK_PICK_COUNT),
-                        favoriteArtists = favoriteArtists.await().getOrThrow().withArtistImage(),
                     )
                 )
             } catch (e: Exception) {
@@ -126,34 +118,6 @@ class HomeViewModel(
 
     private fun List<Album>.replace(album: Album): List<Album> =
         map { if (it.id == album.id) album else it }
-
-    /**
-     * Toggles an artist's starred state and reflects it in both the favorite artists shelf and
-     * the quick picks, so the same artist cannot show a filled star in one row and an outline in
-     * the other.
-     */
-    fun toggleStarArtist(artist: Artist) {
-        viewModelScope.launch {
-            repository.toggleStar(id = artist.id, isStarred = artist.isStarred, isArtist = true)
-                .onSuccess { newStarred ->
-                    val current = _uiState.value as? HomeState.Success ?: return@onSuccess
-                    val starred = artist.copy(starred = if (newStarred) "starred" else null)
-                    _uiState.value = HomeState.Success(
-                        current.data.copy(
-                            artists = current.data.artists.replace(starred),
-                            favoriteArtists = if (newStarred) {
-                                (current.data.favoriteArtists + starred).distinctBy { it.id }
-                            } else {
-                                current.data.favoriteArtists.filterNot { it.id == artist.id }
-                            }
-                        )
-                    )
-                }
-        }
-    }
-
-    private fun List<Artist>.replace(artist: Artist): List<Artist> =
-        map { if (it.id == artist.id) artist else it }
 
     /**
      * Generates a full authenticated cover art URL for a given coverArt ID, asking the server

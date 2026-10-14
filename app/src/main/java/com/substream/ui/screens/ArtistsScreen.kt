@@ -1,26 +1,23 @@
 package com.substream.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +35,7 @@ import coil.compose.AsyncImage
 import com.substream.data.api.Artist
 
 /**
- * Grid of artists served by getArtists.view.
+ * List of artists served by getArtists.view.
  * Rendered inside LibraryScreen, so it has no TopAppBar of its own.
  */
 @Composable
@@ -54,7 +51,7 @@ fun ArtistsScreen(
         emptyMessage = "No artists found.",
         onRetry = onRetry,
     ) { artists ->
-        ArtistsGrid(
+        ArtistList(
             artists = artists,
             onArtistClick = onArtistClick,
             onToggleStar = onToggleStar,
@@ -64,26 +61,22 @@ fun ArtistsScreen(
 }
 
 /**
- * Renders a 2-column grid of Artist Cards. Shared by the Library tab, the Favorites tab and the
- * search results, so all three stay identical.
+ * Renders the artists as one compact row each, the same shape as [AlbumRow]. Shared by the
+ * Library tab, the Favorites tab and the search results, so all three stay identical.
  */
 @Composable
-fun ArtistsGrid(
+fun ArtistList(
     artists: List<Artist>,
     onArtistClick: (Artist) -> Unit,
     onToggleStar: (Artist) -> Unit,
     getCoverArtUrl: (String?) -> String?,
     modifier: Modifier = Modifier,
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+    LazyColumn(
         modifier = modifier.fillMaxSize()
     ) {
         items(items = artists, key = { artist -> artist.id }) { artist ->
-            ArtistCard(
+            ArtistRow(
                 artist = artist,
                 coverArtUrl = getCoverArtUrl(artist.coverArt),
                 onClick = { onArtistClick(artist) },
@@ -93,78 +86,81 @@ fun ArtistsGrid(
     }
 }
 
+/**
+ * One artist as a row: artwork, name, album count and the star.
+ *
+ * [onToggleStar] is null where starring does not apply, so the row does not carry a dead button.
+ */
 @Composable
-fun ArtistCard(
+fun ArtistRow(
     artist: Artist,
     coverArtUrl: String?,
     onClick: () -> Unit,
-    onToggleStar: () -> Unit,
+    onToggleStar: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            // The space between rows is outside the clickable: it belongs to neither row, so
+            // it is not part of either tap target.
+            .padding(vertical = 8.dp)
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Box {
-                // Search results can carry an artist with no artwork at all, so the box is never
-                // left empty: the placeholder shows through until the image resolves.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(40.dp)
-                    )
-                    AsyncImage(
-                        model = coverArtUrl,
-                        contentDescription = artist.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+        // An artist can arrive with no artwork at all, so the placeholder shows through until
+        // the image resolves rather than leaving a blank square.
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+            AsyncImage(
+                model = coverArtUrl,
+                contentDescription = artist.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
-                IconButton(
-                    onClick = onToggleStar,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Icon(
-                        imageVector = if (artist.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (artist.isStarred) "Unfavorite" else "Favorite",
-                        tint = if (artist.isStarred) Color(0xFFFFC107) else Color.White
-                    )
-                }
-            }
+        Spacer(modifier = Modifier.width(12.dp))
 
-            Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = artist.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            artist.albumCount?.let { count ->
                 Text(
-                    text = artist.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    text = if (count == 1) "1 album" else "$count albums",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
 
-                artist.albumCount?.let { count ->
-                    Box(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (count == 1) "1 album" else "$count albums",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+        if (onToggleStar != null) {
+            IconButton(onClick = onToggleStar) {
+                Icon(
+                    imageVector = if (artist.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                    contentDescription = if (artist.isStarred) "Unfavorite" else "Favorite",
+                    tint = if (artist.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

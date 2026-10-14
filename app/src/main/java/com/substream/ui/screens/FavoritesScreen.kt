@@ -76,7 +76,7 @@ fun FavoritesScreen(
                     emptyMessage = "Your favorite artists will show up here.",
                     onRetry = onRetry,
                 ) { artists ->
-                    ArtistsGrid(
+                    ArtistList(
                         artists = artists,
                         onArtistClick = { artist -> onArtistClick(artist.id, artist.name) },
                         onToggleStar = onToggleStarArtist,

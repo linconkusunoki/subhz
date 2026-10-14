@@ -206,6 +206,9 @@ fun AlbumRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // The space between rows is outside the clickable: it belongs to neither row, so
+            // it is not part of either tap target.
+            .padding(vertical = 8.dp)
             .clickable { onClick() }
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically

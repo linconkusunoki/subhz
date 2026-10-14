@@ -245,10 +245,6 @@ private fun ArtistDetailContent(
                             album = album,
                             coverArtUrl = getCoverArtUrl(album.coverArt),
                             onClick = { onAlbumClick(album) },
-                            // These were square cards two to a row; as bare rows they need air
-                            // between them. The padding is outside the row's clickable, so the
-                            // gap is not a dead zone.
-                            modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
                 }
