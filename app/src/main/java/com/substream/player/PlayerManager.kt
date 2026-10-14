@@ -218,9 +218,25 @@ class PlayerManager(
     }
 
     /**
-     * Plays a list of songs, starting at the specified index.
+     * The tracks currently loaded in the player, in queue order.
+     *
+     * The queue the player holds is a list of media items carrying ids; the songs behind them live
+     * here, and the service needs them to store the queue on the server.
      */
-    fun playSongs(songs: List<Song>, startIndex: Int = 0) {
+    fun currentQueue(): List<Song> = currentPlaylist
+
+    /**
+     * Plays a list of songs, starting at the specified index.
+     *
+     * [startPositionMs] and [playWhenReady] exist for restoring a queue saved on the server: it
+     * comes back paused, at the point the user left it, rather than resuming playback on its own.
+     */
+    fun playSongs(
+        songs: List<Song>,
+        startIndex: Int = 0,
+        startPositionMs: Long = 0L,
+        playWhenReady: Boolean = true,
+    ) {
         if (songs.isEmpty()) return
 
         val mediaItems = songs.mapNotNull { song ->
@@ -246,13 +262,13 @@ class PlayerManager(
         _playerState.value = _playerState.value.copy(
             currentSong = initialSong,
             isBuffering = true,
-            currentPositionMs = 0L
+            currentPositionMs = startPositionMs
         )
 
         controller?.let { player ->
-            player.setMediaItems(mediaItems, startIndex, 0L)
+            player.setMediaItems(mediaItems, startIndex, startPositionMs)
             player.prepare()
-            player.play()
+            if (playWhenReady) player.play() else player.pause()
         }
     }
 

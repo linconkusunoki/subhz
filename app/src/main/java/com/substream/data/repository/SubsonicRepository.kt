@@ -43,6 +43,20 @@ internal suspend fun mainArtistIds(fetchPage: suspend (offset: Int) -> List<Albu
 }
 
 /**
+ * A listening position as the server stored it: the tracks, which one was current, and how far in.
+ */
+data class SavedQueue(
+    val songs: List<Song> = emptyList(),
+    val currentId: String? = null,
+    val positionMs: Long = 0L,
+) {
+    /** Nothing worth restoring: no tracks, or a track the server named that is not in the list. */
+    val isEmpty: Boolean get() = songs.isEmpty()
+
+    val indexOfCurrent: Int get() = songs.indexOfFirst { song -> song.id == currentId }.coerceAtLeast(0)
+}
+
+/**
  * Repository responsible for handling data operations related to the Subsonic API.
  * This class abstracts the network logic from the UI layer.
  *
@@ -161,6 +175,32 @@ class SubsonicRepository(
      */
     suspend fun getPlaylists(): Result<List<Playlist>> = call {
         api.getPlaylists().subsonicResponse.playlists?.playlist.orEmpty()
+    }
+
+    /**
+     * Reads the queue the server is holding for this user, for carrying on from another device.
+     *
+     * An empty result is not an error: it is what a server that has no queue yet, or one that does
+     * not implement the endpoint, answers with.
+     */
+    suspend fun getPlayQueue(): Result<SavedQueue> = call {
+        val queue = api.getPlayQueue().subsonicResponse.playQueue
+            ?: return@call SavedQueue()
+        SavedQueue(
+            songs = queue.entry,
+            currentId = queue.current,
+            positionMs = queue.position?.coerceAtLeast(0L) ?: 0L,
+        )
+    }
+
+    /**
+     * Stores the queue server-side so it can be picked up again here or on another device.
+     *
+     * Only the current track's position is stored, which is what the server expects: the position
+     * is meaningful for one track, not for a list.
+     */
+    suspend fun savePlayQueue(songs: List<Song>, currentId: String?, positionMs: Long): Result<Unit> = call {
+        api.savePlayQueue(ids = songs.map { song -> song.id }, current = currentId, position = positionMs)
     }
 
     /**

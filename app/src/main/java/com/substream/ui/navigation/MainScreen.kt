@@ -34,6 +34,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.substream.data.api.ServerCapabilities
 import com.substream.data.preferences.ServerPreferences
+import com.substream.data.repository.SubsonicRepository
 import com.substream.player.PlayerManager
 import com.substream.ui.components.PlayerBar
 import com.substream.ui.screens.AlbumDetailScreen
@@ -82,6 +83,7 @@ fun MainScreen(
 private fun MainNavScreen(
     navController: NavHostController = rememberNavController(),
     playerManager: PlayerManager = koinInject(),
+    repository: SubsonicRepository = koinInject(),
 ) {
     val playerState by playerManager.playerState.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -101,6 +103,21 @@ private fun MainNavScreen(
     var isPlayerExpanded by rememberSaveable { mutableStateOf(false) }
     val playerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+
+    // Picks up the queue the server is holding, so the app opens on the song that was playing
+    // rather than on nothing. Restored paused at the saved position: the position is the user's,
+    // but starting to play it is not.
+    LaunchedEffect(Unit) {
+        repository.getPlayQueue().onSuccess { queue ->
+            if (queue.isEmpty) return@onSuccess
+            playerManager.playSongs(
+                songs = queue.songs,
+                startIndex = queue.indexOfCurrent,
+                startPositionMs = queue.positionMs,
+                playWhenReady = false,
+            )
+        }
+    }
 
     // Single entry point to switch tabs. Using it for *every* jump to a tab
     // (bottom bar clicks AND in-screen shortcuts) keeps ViewModel state alive

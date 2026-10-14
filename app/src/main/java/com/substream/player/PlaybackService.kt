@@ -5,6 +5,7 @@ package com.substream.player
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.cache.CacheDataSource
@@ -29,6 +30,13 @@ import org.koin.core.component.inject
 private const val SCROBBLE_POLL_MS = 1_000L
 
 /**
+ * How often the queue is written back to the server. Long enough that the position is accurate to
+ * a few seconds for anyone picking the queue up elsewhere, short enough that killing the app does
+ * not lose much of the song.
+ */
+private const val QUEUE_SAVE_MS = 15_000L
+
+/**
  * Foreground MediaSessionService enabling background audio playback
  * and integration with Android system notifications and lockscreen controls.
  */
@@ -51,9 +59,13 @@ class PlaybackService : MediaSessionService(), KoinComponent {
      */
     private val repository: SubsonicRepository by inject()
 
+    /** Holds the songs behind the player's media items, which the queue is stored from. */
+    private val playerManager: PlayerManager by inject()
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val scrobbleTracker = ScrobbleTracker()
     private var scrobbleJob: Job? = null
+    private var queueSaveJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -94,10 +106,55 @@ class PlaybackService : MediaSessionService(), KoinComponent {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 startScrobbleWatch()
+                startQueueSaveWatch()
             } else {
                 stopScrobbleWatch()
+                stopQueueSaveWatch()
+                // Pausing is the last moment the position is exact: once stopped, the loop is
+                // gone and whatever the server holds would be wherever the tick before left it.
+                serviceScope.launch { persistQueue() }
             }
         }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // The track the server would resume has changed, so the stored one is stale.
+            serviceScope.launch { persistQueue() }
+        }
+    }
+
+    /**
+     * Mirrors the listening position to the server while playing, so the app can be killed, or
+     * another device can pick the same queue up, without losing where the user was.
+     */
+    private fun startQueueSaveWatch() {
+        queueSaveJob?.cancel()
+        queueSaveJob = serviceScope.launch {
+            while (isActive) {
+                delay(QUEUE_SAVE_MS)
+                persistQueue()
+            }
+        }
+    }
+
+    private fun stopQueueSaveWatch() {
+        queueSaveJob?.cancel()
+        queueSaveJob = null
+    }
+
+    /**
+     * Writes the current queue and position to the server. Best effort: the Result is not inspected,
+     * because a server that does not implement the endpoint must not surface as an error, and a
+     * queue saved a minute late is still a queue.
+     */
+    private suspend fun persistQueue() {
+        val songs = playerManager.currentQueue()
+        if (songs.isEmpty()) return
+        val player = exoPlayer ?: return
+        repository.savePlayQueue(
+            songs = songs,
+            currentId = player.currentMediaItem?.mediaId,
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+        )
     }
 
     /**
@@ -178,6 +235,7 @@ class PlaybackService : MediaSessionService(), KoinComponent {
 
     override fun onDestroy() {
         stopScrobbleWatch()
+        stopQueueSaveWatch()
         serviceScope.cancel()
         mediaSession?.run {
             player.release()

@@ -2,7 +2,10 @@ package com.substream.data.api
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 // =====================================================================
@@ -26,6 +29,7 @@ data class SubsonicResponse(
     val playlists: PlaylistsContainer? = null,
     val starred2: StarredContainer? = null,
     val openSubsonicExtensions: List<OpenSubsonicExtension>? = null,
+    val playQueue: PlayQueue? = null,
     val error: SubsonicError? = null
 )
 
@@ -79,6 +83,19 @@ data class Playlist(
     val coverArt: String? = null,
     val songCount: Int? = null,
     val owner: String? = null
+)
+
+/**
+ * The queue the server holds for this user, from getPlayQueue.view.
+ *
+ * It is the whole listening position: the tracks, which one was current and how far into it the
+ * user had got, which is what lets another device carry on where this one stopped.
+ */
+@Serializable
+data class PlayQueue(
+    val current: String? = null,
+    val position: Long? = null,
+    val entry: List<Song> = emptyList()
 )
 
 @Serializable
@@ -245,6 +262,28 @@ interface SubsonicApiService {
 
     @GET("rest/getStarred2.view")
     suspend fun getStarred(
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    @GET("rest/getPlayQueue.view")
+    suspend fun getPlayQueue(
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Stores the queue server-side. A POST because a queue is a list of song ids and a GET would
+     * have to spell them all out in the URL.
+     */
+    @FormUrlEncoded
+    @POST("rest/savePlayQueue.view")
+    suspend fun savePlayQueue(
+        @Field("id") ids: List<String>,
+        @Field("current") current: String?,
+        @Field("position") position: Long?,
         @Query("v") version: String = "1.16.1",
         @Query("c") client: String = "SubStream",
         @Query("f") format: String = "json"
