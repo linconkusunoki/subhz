@@ -193,7 +193,6 @@ private fun AlbumDetailContent(
                 index = index + 1,
                 song = song,
                 onSongClick = onSongClick,
-                onArtistClick = onArtistClick,
                 onToggleStarSong = { onToggleStarSong(song) }
             )
         }
@@ -308,7 +307,6 @@ private fun SongRowItem(
     index: Int,
     song: Song,
     onSongClick: (Song) -> Unit,
-    onArtistClick: (String, String) -> Unit,
     onToggleStarSong: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -343,24 +341,15 @@ private fun SongRowItem(
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (!song.artist.isNullOrEmpty()) {
-                val rowArtistName = song.artist
-                val rowArtistId = song.artistId
+            // Plain text: the whole row is the tap target for playback, so a nested
+            // link here only causes mis-taps. Reach the artist from the album header.
+            song.artist?.takeIf { it.isNotEmpty() }?.let { rowArtistName ->
                 Text(
                     text = rowArtistName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (rowArtistId != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = if (rowArtistId != null) {
-                        Modifier.clickable { onArtistClick(rowArtistId, rowArtistName) }
-                    } else {
-                        Modifier
-                    }
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
