@@ -52,7 +52,7 @@ data class PlayerState(
 class PlayerManager(
     private val context: Context,
     private val serverPreferences: ServerPreferences,
-    private val playbackPreferences: PlaybackPreferences = PlaybackPreferences(context),
+    private val playbackPreferences: PlaybackPreferences,
 ) {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null

@@ -90,7 +90,14 @@ val appModule = module {
 
     // PlayerManager initialized with Android Context
     single {
-        PlayerManager(context = androidContext(), serverPreferences = get())
+        // playbackPreferences must come from the graph: the constructor default would build a
+        // second instance, and Settings would then write to one while the player read the other,
+        // so the quality setting would do nothing at all.
+        PlayerManager(
+            context = androidContext(),
+            serverPreferences = get(),
+            playbackPreferences = get(),
+        )
     }
 
     // 4. viewModel {} tells Koin how to build our ViewModels

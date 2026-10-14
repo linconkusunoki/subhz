@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,6 +89,9 @@ fun NowPlayingScreen(
     // Lyrics stand in for the artwork rather than sitting under it, so only one of the two is ever
     // on screen and the controls below stay where the thumb is.
     var showingLyrics by rememberSaveable { mutableStateOf(false) }
+
+    // Reset per track: the rating of the song before this one is not the rating of this one.
+    var songRating by remember(currentSong?.id) { mutableStateOf(currentSong?.userRating) }
 
     // Automatically dismiss full screen if no song is currently playing or loaded
     LaunchedEffect(currentSong) {
@@ -224,10 +228,15 @@ fun NowPlayingScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // 4. Rating for the track being played
+                // 4. Rating for the track being played. Held here rather than read back off the
+                // song: the player holds the Song it was built with, and nothing in it updates
+                // after a rating, so the stars would never move.
                 RatingBar(
-                    rating = currentSong.userRating,
-                    onRate = { rating -> ratingViewModel.rate(currentSong, rating) },
+                    rating = songRating,
+                    onRate = { rating ->
+                        songRating = rating.takeIf { it > 0 }
+                        ratingViewModel.rate(currentSong, rating)
+                    },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
                 )
 
