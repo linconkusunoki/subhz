@@ -105,7 +105,6 @@ fun LibraryScreen(
             when (LibraryTab.entries[page]) {
                 LibraryTab.Albums -> AlbumsScreen(
                     onAlbumClick = onAlbumClick,
-                    onArtistClick = onArtistClick,
                     showTopBar = false,
                 )
 

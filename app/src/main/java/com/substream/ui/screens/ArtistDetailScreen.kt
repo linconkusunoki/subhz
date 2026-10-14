@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -235,15 +235,20 @@ private fun ArtistDetailContent(
                 if (artistDetail.album.isEmpty()) {
                     item { EmptyArtistTab("No albums found.") }
                 } else {
-                    val rows = artistDetail.album.chunked(2)
-                    itemsIndexed(
-                        items = rows,
-                        key = { index, row -> "albums-$index-${row.first().id}" }
-                    ) { _, row ->
-                        AlbumCardRow(
-                            albums = row,
-                            onAlbumClick = onAlbumClick,
-                            getCoverArtUrl = getCoverArtUrl,
+                    // One album per row now, so the albums go straight into the list. There is
+                    // no star: the header above already stars the artist.
+                    items(
+                        items = artistDetail.album,
+                        key = { album -> album.id }
+                    ) { album ->
+                        AlbumRow(
+                            album = album,
+                            coverArtUrl = getCoverArtUrl(album.coverArt),
+                            onClick = { onAlbumClick(album) },
+                            // These were square cards two to a row; as bare rows they need air
+                            // between them. The padding is outside the row's clickable, so the
+                            // gap is not a dead zone.
+                            modifier = Modifier.padding(vertical = 8.dp),
                         )
                     }
                 }
@@ -283,42 +288,6 @@ private fun ArtistDetailContent(
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * One row of the albums list: up to two cards side by side, laid out by weight so the same code
- * serves both the full rows and the half-empty last one.
- */
-@Composable
-private fun AlbumCardRow(
-    albums: List<Album>,
-    onAlbumClick: (Album) -> Unit,
-    getCoverArtUrl: (String?) -> String?,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        albums.forEach { album ->
-            AlbumCard(
-                album = album,
-                coverArtUrl = getCoverArtUrl(album.coverArt),
-                onClick = { onAlbumClick(album) },
-                // Every album on this screen belongs to this artist, so the header above is
-                // already the destination; the card's own artist line has nowhere to go.
-                onArtistClick = { _, _ -> },
-                onToggleStar = { },
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        if (albums.size == 1) {
-            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

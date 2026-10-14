@@ -2,24 +2,18 @@ package com.substream.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,8 +23,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -306,10 +298,9 @@ private fun SearchResultsTabbedContent(
                 if (searchResult.album.isEmpty()) {
                     EmptySectionText(message = "No albums found.")
                 } else {
-                    SearchAlbumsGrid(
+                    AlbumList(
                         albums = searchResult.album,
                         onAlbumClick = onAlbumClick,
-                        onArtistClick = onArtistClick,
                         onToggleStar = onToggleStarAlbum,
                         getCoverArtUrl = getCoverArtUrl
                     )
@@ -334,119 +325,7 @@ private fun SearchResultsTabbedContent(
 }
 
 // =====================================================================
-// 4. ALBUMS GRID COMPOSABLE
-// =====================================================================
-
-@Composable
-private fun SearchAlbumsGrid(
-    albums: List<Album>,
-    onAlbumClick: (Album) -> Unit,
-    onArtistClick: (String, String) -> Unit,
-    onToggleStar: (Album) -> Unit,
-    getCoverArtUrl: (String?) -> String?
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        items(
-            items = albums,
-            key = { album -> album.id }
-        ) { album ->
-            SearchAlbumCard(
-                album = album,
-                coverArtUrl = getCoverArtUrl(album.coverArt),
-                onClick = { onAlbumClick(album) },
-                onArtistClick = onArtistClick,
-                onToggleStar = { onToggleStar(album) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchAlbumCard(
-    album: Album,
-    coverArtUrl: String?,
-    onClick: () -> Unit,
-    onArtistClick: (String, String) -> Unit,
-    onToggleStar: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column {
-            Box {
-                AsyncImage(
-                    model = coverArtUrl,
-                    contentDescription = album.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                )
-
-                // Favorite Star Button on Album Cover
-                IconButton(
-                    onClick = onToggleStar,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    Icon(
-                        imageVector = if (album.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                        contentDescription = if (album.isStarred) "Unfavorite" else "Favorite",
-                        tint = if (album.isStarred) Color(0xFFFFC107) else Color.White
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = album.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                val cardArtistName = album.artist ?: "Unknown Artist"
-                val cardArtistId = album.artistId
-                if (cardArtistId != null) {
-                    Text(
-                        text = cardArtistName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { onArtistClick(cardArtistId, cardArtistName) }
-                    )
-                } else {
-                    Text(
-                        text = cardArtistName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-// =====================================================================
-// 5. SONGS LIST COMPOSABLE
+// 4. SONGS LIST COMPOSABLE
 // =====================================================================
 
 @Composable
@@ -560,7 +439,7 @@ private fun SearchSongRowItem(
 }
 
 // =====================================================================
-// 6. HELPER COMPONENTS
+// 5. HELPER COMPONENTS
 // =====================================================================
 
 @Composable

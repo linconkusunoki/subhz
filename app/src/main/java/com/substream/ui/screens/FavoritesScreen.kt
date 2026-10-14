@@ -63,10 +63,9 @@ fun FavoritesScreen(
                     emptyMessage = "Your favorite albums will show up here.",
                     onRetry = onRetry,
                 ) { albums ->
-                    AlbumGrid(
+                    AlbumList(
                         albums = albums,
                         onAlbumClick = onAlbumClick,
-                        onArtistClick = onArtistClick,
                         onToggleStar = onRemove,
                         getCoverArtUrl = getCoverArtUrl,
                     )

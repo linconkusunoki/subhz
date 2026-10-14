@@ -1,10 +1,11 @@
 package com.substream.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -12,9 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -63,7 +65,6 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun AlbumsScreen(
     onAlbumClick: (Album) -> Unit = {},
-    onArtistClick: (String, String) -> Unit = { _, _ -> },
     onSearchClick: () -> Unit = {},
     title: String = "Albums",
     showTopBar: Boolean = true,
@@ -105,10 +106,9 @@ fun AlbumsScreen(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     } else {
-                        AlbumGrid(
+                        AlbumList(
                             albums = state.albums,
                             onAlbumClick = onAlbumClick,
-                            onArtistClick = onArtistClick,
                             onToggleStar = { album -> viewModel.toggleStarAlbum(album) },
                             getCoverArtUrl = { coverArt -> viewModel.getCoverArtUrl(coverArt) }
                         )
@@ -152,39 +152,102 @@ fun AlbumsScreen(
 }
 
 // =====================================================================
-// 2. GRID COMPOSABLE
+// 2. ALBUM LIST AND ROW COMPOSABLES
 // =====================================================================
 
 /**
- * Renders a 2-column grid of Album Cards using LazyVerticalGrid.
+ * Renders the albums as one compact row per album.
+ *
+ * A row and not a card grid: two columns of square covers spend most of the screen on artwork
+ * and leave the names short enough to be cut off, while a list fits twice as many albums on the
+ * same screen and gives the names a line each. The Home shelves are the exception and keep
+ * [AlbumCard], because they scroll sideways.
  */
 @Composable
-fun AlbumGrid(
+fun AlbumList(
     albums: List<Album>,
     onAlbumClick: (Album) -> Unit,
-    onArtistClick: (String, String) -> Unit,
     onToggleStar: (Album) -> Unit,
     getCoverArtUrl: (String?) -> String?,
     modifier: Modifier = Modifier
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+    LazyColumn(
         modifier = modifier.fillMaxSize()
     ) {
         items(
             items = albums,
             key = { album -> album.id }
         ) { album ->
-            AlbumCard(
+            AlbumRow(
                 album = album,
                 coverArtUrl = getCoverArtUrl(album.coverArt),
                 onClick = { onAlbumClick(album) },
-                onArtistClick = { artistId, artistName -> onArtistClick(artistId, artistName) },
                 onToggleStar = { onToggleStar(album) }
             )
+        }
+    }
+}
+
+/**
+ * One album as a row: cover, name, artist and the star.
+ *
+ * The artist is plain text. The row already opens the album, and a link inside it is the same
+ * mis-tap trap the song rows had: the tap lands on one thing while the finger aimed at another.
+ * [onToggleStar] is null where starring does not apply, so the row does not carry a dead button.
+ */
+@Composable
+fun AlbumRow(
+    album: Album,
+    coverArtUrl: String?,
+    onClick: () -> Unit,
+    onToggleStar: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = coverArtUrl,
+            contentDescription = album.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = album.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = album.artist ?: "Unknown Artist",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (onToggleStar != null) {
+            IconButton(onClick = onToggleStar) {
+                Icon(
+                    imageVector = if (album.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                    contentDescription = if (album.isStarred) "Unfavorite" else "Favorite",
+                    tint = if (album.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
