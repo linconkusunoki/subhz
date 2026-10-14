@@ -314,7 +314,9 @@ private fun SongRowItem(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onSongClick(song) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            // No vertical padding: the star button's 48dp minimum touch target already sets the
+            // row height, and padding on top of it only opens a gap between the titles.
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Track number
@@ -329,30 +331,16 @@ private fun SongRowItem(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Song Title and Artist
-        Column(
+        // Song title. The artist is already named in the header above, so repeating it on
+        // every row of the same album says nothing.
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Plain text: the whole row is the tap target for playback, so a nested
-            // link here only causes mis-taps. Reach the artist from the album header.
-            song.artist?.takeIf { it.isNotEmpty() }?.let { rowArtistName ->
-                Text(
-                    text = rowArtistName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        )
 
         Spacer(modifier = Modifier.width(12.dp))
 

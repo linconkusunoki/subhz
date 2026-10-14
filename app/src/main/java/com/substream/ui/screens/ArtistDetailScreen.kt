@@ -143,13 +143,18 @@ fun ArtistDetailScreen(
                 }
 
                 is ArtistDetailState.Success -> {
+                    // One list drives the Songs tab and every playback action, so the order on
+                    // screen is the order that plays.
+                    val songs = remember(state.songs) {
+                        (state.songs as? LoadState.Success)?.items.orEmpty().groupedByAlbum()
+                    }
                     ArtistDetailContent(
                         artistDetail = state.artistDetail,
                         songsState = state.songs,
+                        songs = songs,
                         getCoverArtUrl = viewModel::getCoverArtUrl,
                         onAlbumClick = onAlbumClick,
                         onSongClick = { song ->
-                            val songs = (state.songs as? LoadState.Success)?.items.orEmpty()
                             playerManager.playSongs(songs, songs.indexOf(song).coerceAtLeast(0))
                         },
                         onToggleStarArtist = { viewModel.toggleStarArtist(state.artistDetail) },
@@ -184,6 +189,7 @@ private enum class ArtistTab(val label: String) {
 private fun ArtistDetailContent(
     artistDetail: ArtistDetail,
     songsState: LoadState<Song>,
+    songs: List<Song>,
     getCoverArtUrl: (String?) -> String?,
     onAlbumClick: (Album) -> Unit,
     onSongClick: (Song) -> Unit,
@@ -194,7 +200,7 @@ private fun ArtistDetailContent(
     modifier: Modifier = Modifier,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val songs = (songsState as? LoadState.Success)?.items.orEmpty()
+    val songRows = remember(songs, artistDetail) { buildSongRows(songs, artistDetail) }
 
     LazyColumn(
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -256,15 +262,22 @@ private fun ArtistDetailContent(
                             item { EmptyArtistTab("No songs found.") }
                         } else {
                             itemsIndexed(
-                                items = songs,
-                                key = { _, song -> song.id }
-                            ) { index, song ->
-                                ArtistSongRow(
-                                    index = index + 1,
-                                    song = song,
-                                    onSongClick = onSongClick,
-                                    onToggleStarSong = { onToggleStarSong(song) },
-                                )
+                                items = songRows,
+                                key = { _, row -> row.key }
+                            ) { _, row ->
+                                when (row) {
+                                    is SongTabItem.AlbumHeader -> AlbumGroupHeader(
+                                        album = row.album,
+                                        onAlbumClick = onAlbumClick
+                                    )
+
+                                    is SongTabItem.Track -> ArtistSongRow(
+                                        index = row.index,
+                                        song = row.song,
+                                        onSongClick = onSongClick,
+                                        onToggleStarSong = { onToggleStarSong(row.song) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -440,8 +453,110 @@ private fun ArtistHeader(
 }
 
 // =====================================================================
-// 4. SONG ROW COMPOSABLE
+// 4. SONGS TAB MODEL, ALBUM HEADER AND SONG ROW
 // =====================================================================
+
+/**
+ * One line of the Songs tab: an album heading or a track.
+ */
+private sealed interface SongTabItem {
+    val key: String
+
+    /** [album] carries an empty id when the server did not index the album, leaving it inert. */
+    data class AlbumHeader(val album: Album, override val key: String) : SongTabItem
+
+    data class Track(val index: Int, override val key: String, val song: Song) : SongTabItem
+}
+
+/**
+ * Groups the songs by album, keeping the albums in the order they first appear and the songs in
+ * the order the server returned them.
+ *
+ * search3 makes no promise that one album's songs come back together, and when they are not, a
+ * heading per change lands between nearly every pair of tracks: the list stops reading as songs
+ * and starts reading as headings, which is what a heading on its own row is for. Grouping is
+ * what makes one heading per album true.
+ */
+private fun List<Song>.groupedByAlbum(): List<Song> {
+    val byAlbum = LinkedHashMap<String, MutableList<Song>>()
+    forEach { song ->
+        byAlbum.getOrPut(song.album.orEmpty()) { mutableListOf() }.add(song)
+    }
+    return byAlbum.values.flatten()
+}
+
+/**
+ * Flattens the songs into one heading per album followed by that album's tracks.
+ *
+ * The album name is a heading rather than a second line under every title, because an artist
+ * with one album repeats that name once per track and it tells the reader nothing.
+ *
+ * Keys are the position in the song list, not the song id: a track listed on two albums comes
+ * back twice with one id, and the lazy list throws on a duplicate key.
+ */
+private fun buildSongRows(songs: List<Song>, artist: ArtistDetail): List<SongTabItem> = buildList {
+    var previousAlbum: String? = null
+    songs.forEachIndexed { index, song ->
+        val albumName = song.album?.takeIf { it.isNotEmpty() }
+        if (albumName != null && albumName != previousAlbum) {
+            add(
+                SongTabItem.AlbumHeader(
+                    album = Album(
+                        id = song.albumId.orEmpty(),
+                        name = albumName,
+                        artist = artist.name,
+                        artistId = artist.id
+                    ),
+                    key = "album-$index"
+                )
+            )
+            previousAlbum = albumName
+        }
+        add(SongTabItem.Track(index = index + 1, key = "song-$index", song = song))
+    }
+}
+
+/**
+ * Album name above the first track of that album, with a rule under it so it reads as a heading
+ * rather than a track missing its number, duration and star. Tapping it opens that album: a
+ * heading the user can land on by accident has to be worth landing on.
+ */
+@Composable
+private fun AlbumGroupHeader(
+    album: Album,
+    onAlbumClick: (Album) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val linked = album.id.isNotEmpty()
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = album.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (linked) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // Aligned with the track number column above it, and the space above it is what tells
+            // one album's tracks from the next. The clickable is inside the padding so its
+            // area is the heading itself and not the track below it.
+            modifier = if (linked) {
+                Modifier
+                    .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 4.dp)
+                    .clickable { onAlbumClick(album) }
+            } else {
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 4.dp)
+            }
+        )
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
 
 @Composable
 private fun ArtistSongRow(
@@ -455,7 +570,9 @@ private fun ArtistSongRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onSongClick(song) }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            // No vertical padding: the star button's 48dp minimum touch target already sets the
+            // row height, and padding on top of it only opens a gap between the titles.
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -469,25 +586,15 @@ private fun ArtistSongRow(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (!song.album.isNullOrEmpty()) {
-                Text(
-                    text = song.album,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        // The album is named once in the heading above its first track, not on every row.
+        Text(
+            text = song.title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
 
         Spacer(modifier = Modifier.width(12.dp))
 
