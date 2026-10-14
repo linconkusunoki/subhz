@@ -15,6 +15,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -24,23 +27,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.substream.data.preferences.PlaybackPreferences
 import com.substream.data.preferences.ServerPreferences
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
 /**
- * Settings tab: shows the connected server, verifies the stored credentials, and
- * allows changing the server or logging out.
+ * Settings tab: shows the connected server, verifies the stored credentials, sets the streaming
+ * quality, and allows changing the server or logging out.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onChangeServer: () -> Unit = {},
     serverPreferences: ServerPreferences = koinInject(),
+    playbackPreferences: PlaybackPreferences = koinInject(),
     viewModel: PingViewModel = koinViewModel(),
 ) {
     val config by serverPreferences.config.collectAsState()
     val state by viewModel.uiState.collectAsState()
+    val maxBitRate by playbackPreferences.maxBitRate.collectAsState()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
@@ -81,6 +87,38 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Streaming quality", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "The server transcodes on the fly, so a lower ceiling means fewer " +
+                            "megabytes over the air and a lower ceiling in quality. Original plays " +
+                            "the file as it is stored.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        STREAM_QUALITIES.forEachIndexed { index, (label, kbps) ->
+                            SegmentedButton(
+                                selected = maxBitRate == kbps,
+                                onClick = { playbackPreferences.setMaxBitRate(kbps) },
+                                shape = SegmentedButtonDefaults.itemShape(index, STREAM_QUALITIES.size),
+                            ) {
+                                Text(label)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -128,3 +166,11 @@ fun SettingsScreen(
         }
     }
 }
+
+/** Streaming ceilings offered in Settings, in kbps. 0 is the original file. */
+private val STREAM_QUALITIES = listOf(
+    "Original" to 0,
+    "320" to 320,
+    "192" to 192,
+    "128" to 128,
+)

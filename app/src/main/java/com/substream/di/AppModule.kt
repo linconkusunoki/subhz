@@ -4,10 +4,13 @@ package com.substream.di
 
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheKeyFactory
 import com.substream.data.api.ApiClientFactory
 import com.substream.data.api.ServerCapabilities
+import com.substream.data.preferences.PlaybackPreferences
 import com.substream.data.preferences.ServerPreferences
 import com.substream.data.repository.SubsonicRepository
 import com.substream.player.PlayerManager
@@ -43,6 +46,9 @@ val appModule = module {
         SubsonicRepository(api = get(), serverPreferences = get())
     }
 
+    // Device playback settings, e.g. the streaming quality ceiling.
+    single { PlaybackPreferences(androidContext()) }
+
     // Which OpenSubsonic extensions the signed-in server implements.
     single {
         ServerCapabilities(api = get(), serverPreferences = get())
@@ -63,6 +69,19 @@ val appModule = module {
             .setCache(mediaCacheManager.simpleCache)
             .setUpstreamDataSourceFactory(httpDataSourceFactory)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            // The stream URL carries a fresh random salt every time it is built, so the URL is no
+            // use as a cache key: the same song would be re-downloaded on every session. Keying on
+            // the song id alone fixes that, but with two quality settings it would serve the bytes
+            // of whichever was cached first, so the bitrate is part of the key too.
+            .setCacheKeyFactory(
+                object : CacheKeyFactory {
+                    override fun buildCacheKey(dataSpec: DataSpec): String {
+                        val uri = dataSpec.uri
+                        return uri.getQueryParameter("maxBitRate").orEmpty() +
+                            ":" + uri.getQueryParameter("id").orEmpty()
+                    }
+                }
+            )
     }
 
     // PlayerManager initialized with Android Context

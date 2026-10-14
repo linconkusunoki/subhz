@@ -10,6 +10,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.substream.data.api.Song
+import com.substream.data.preferences.PlaybackPreferences
 import com.substream.data.preferences.ServerPreferences
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +52,7 @@ data class PlayerState(
 class PlayerManager(
     private val context: Context,
     private val serverPreferences: ServerPreferences,
+    private val playbackPreferences: PlaybackPreferences = PlaybackPreferences(context),
 ) {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -181,9 +183,26 @@ class PlayerManager(
     /**
      * Constructs the authenticated streaming URL for a given song ID.
      * Returns null when nobody is signed in.
+     *
+     * Carries the user's quality ceiling when they set one: the server transcodes on the fly, so
+     * asking for a lower bitrate costs the phone's data plan and nothing else. A ceiling of 0 asks
+     * for the original file. Transcoded streams carry no content length up front, so it is asked for
+     * explicitly, otherwise seeking has nothing to seek within.
      */
-    fun getStreamUrl(songId: String): String? =
-        serverPreferences.activeServer?.authenticatedUrl("stream.view", "id" to songId)
+    fun getStreamUrl(songId: String): String? {
+        val config = serverPreferences.activeServer ?: return null
+        val maxBitRate = playbackPreferences.maxBitRate.value
+        return if (maxBitRate <= 0) {
+            config.authenticatedUrl("stream.view", "id" to songId)
+        } else {
+            config.authenticatedUrl(
+                "stream.view",
+                "id" to songId,
+                "maxBitRate" to maxBitRate.toString(),
+                "estimateContentLength" to "true",
+            )
+        }
+    }
 
     /**
      * Constructs the authenticated cover art URL for a given coverArt ID.
