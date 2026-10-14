@@ -1,28 +1,46 @@
 package com.substream.ui.navigation
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import kotlin.math.roundToInt
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -98,11 +116,14 @@ private fun MainNavScreen(
         BottomNavItem.Settings,
     )
 
-    // The full screen player is a ModalBottomSheet rather than a NavHost destination so the
-    // mini bar expands into it with Material's spring: sheet slides up over a scrim, swipe down
-    // (or back, or the chevron) collapses it back onto the still-mounted bar.
+    // The full screen player sits over the whole app rather than in the NavHost, so collapsing it
+    // drops back onto the mini bar, which never unmounted and so never re-enters with an animation.
+    //
+    // It is not a ModalBottomSheet because that one animates itself in on tap: the sheet moves at
+    // its own speed whether or not your thumb is involved, and it cannot be caught while it does.
+    // [PlayerSheet] below moves under a spring you can interrupt, so opening it feels like pulling
+    // it up rather than being shown one.
     var isPlayerExpanded by rememberSaveable { mutableStateOf(false) }
-    val playerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
     // Picks up the queue the server is holding, so the app opens on the song that was playing
@@ -305,36 +326,155 @@ private fun MainNavScreen(
 
     // Player Expandido (Now Playing), as a sheet over the whole app.
     if (isPlayerExpanded) {
-        ModalBottomSheet(
-            onDismissRequest = { isPlayerExpanded = false },
-            sheetState = playerSheetState,
-            // Uncapped width: the player is full screen, including on tablets/foldables.
-            sheetMaxWidth = Dp.Unspecified,
-            // NowPlayingScreen's own Scaffold owns the insets from here (same reason the main
-            // Scaffold zeroes them), so the sheet must not add them a second time.
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-        ) {
+        PlayerSheet(onDismiss = { isPlayerExpanded = false }) { collapse ->
             NowPlayingScreen(
-                // hide() suspends until the collapse animation is done, so the sheet is only
-                // unmounted once it is off screen.
-                onBackClick = {
-                    scope.launch {
-                        playerSheetState.hide()
-                        isPlayerExpanded = false
-                    }
-                },
+                onBackClick = { scope.launch { collapse() } },
                 // The artist line links out of the sheet, so the sheet has to be gone before
-                // navigating or it stays on top of the artist screen it just opened. hide()
-                // suspending is what makes the ordering correct.
+                // navigating or it stays on top of the artist screen it just opened. Collapsing
+                // before navigating is what makes the ordering correct.
                 onArtistClick = { artistId, _ ->
                     scope.launch {
-                        playerSheetState.hide()
-                        isPlayerExpanded = false
+                        collapse()
                         navController.navigate(Screen.ArtistDetail.createRoute(artistId))
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+/**
+ * The slow, interruptible travel of the player sheet, shared by the open and the close.
+ *
+ * Soft and slow on purpose: Material's sheet spring is quick enough to be over before the eye has
+ * caught up, which is what makes a tap feel like nothing happened. Slightly under critical damping,
+ * so it arrives with a hint of weight rather than a wobble.
+ */
+private val PlayerSheetSpring = spring<Float>(dampingRatio = 0.95f, stiffness = 240f)
+
+/** Fling down faster than this (px/s) and the sheet is gone, wherever it had got to. */
+private const val PlayerSheetFlingAway = 1200f
+
+/** Or dragged this far down (as a fraction of its height) and it is gone too. */
+private const val PlayerSheetDismissFraction = 0.35f
+
+/**
+ * Wraps the player's content in the sheet behaviour: slides up on a spring, tracks a downward
+ * drag, and can be flung away.
+ *
+ * Drags are handled twice over, and both halves are needed. A plain [draggable] catches the ones
+ * that land on the sheet itself; a nested scroll connection catches the ones that start inside a
+ * scrollable within it (the lyrics, the track list) and are left over once that scrollable has had
+ * all it wants. Without the first there is no drag at all, because nested scroll alone is never
+ * dispatched when nothing below it is scrollable. Without the second the sheet would follow every
+ * drag inside the lyrics, which is the difference between a sheet you can flick away and one that
+ * gets in the way of reading something.
+ *
+ * [onDismiss] fires once the sheet has finished travelling down, never mid-flight.
+ */
+@Composable
+private fun PlayerSheet(
+    onDismiss: () -> Unit,
+    content: @Composable (collapse: suspend () -> Unit) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+
+    // 0f is fully in place, 1f is entirely below the bottom edge. Everything is a fraction of this,
+    // so the sheet behaves the same on a phone and on a tablet.
+    val offset = remember { Animatable(1f) }
+    val heightPx = remember { mutableIntStateOf(1) }
+
+    // Travel on mount, i.e. on open. The close is not driven from here: it is always an explicit
+    // collapse() first, so that a dismissal finishes animating before the sheet leaves the tree.
+    LaunchedEffect(Unit) {
+        offset.animateTo(0f, PlayerSheetSpring)
+    }
+
+    // Unmount only after the sheet is off screen, so it never disappears mid-flight.
+    suspend fun collapse() {
+        offset.animateTo(1f, PlayerSheetSpring)
+        onDismiss()
+    }
+
+    /**
+     * Moves the sheet by [deltaPx] and reports how much of that it actually took, which is what a
+     * nested scroll connection owes its children. The move itself has to be a coroutine because
+     * [Animatable.snapTo] is suspending, so the new position is worked out here and applied there.
+     */
+    fun pull(deltaPx: Float): Float {
+        val travel = heightPx.value.toFloat()
+        if (travel <= 1f) return 0f
+        val from = offset.value
+        val to = (from + deltaPx / travel).coerceIn(0f, 1f)
+        scope.launch { offset.snapTo(to) }
+        return (to - from) * travel
+    }
+
+    /** Where it comes to rest: flung or dragged far enough to be gone, otherwise back in place. */
+    suspend fun settle(velocityPxPerSecond: Float) {
+        if (velocityPxPerSecond > PlayerSheetFlingAway ||
+            offset.value > PlayerSheetDismissFraction
+        ) {
+            collapse()
+        } else {
+            offset.animateTo(0f, PlayerSheetSpring)
+        }
+    }
+
+    // Drags that land on the sheet itself. [nestedScroll] below covers the rest: a drag that starts
+    // inside one of the sheet's own scrollables belongs to it, and this never sees those.
+    val dragState = rememberDraggableState { delta -> pull(delta) }
+
+    val nestedScroll = remember {
+        object : NestedScrollConnection {
+            // Upward drags are left alone: they belong to whatever is scrolling inside the sheet.
+            // Downward ones move the sheet, but only while it is not already all the way up.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y <= 0f || offset.value <= 0f) return Offset.Zero
+                return Offset(0f, pull(available.y))
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (consumed.y <= 0f && available.y < PlayerSheetFlingAway) return Velocity.Zero
+                settle(available.y)
+                return available
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // Dims the app underneath, fading with the sheet rather than blinking on at full strength.
+        // Tapping it is the same as the chevron, the way a scrim anywhere else behaves.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = (1f - offset.value) * 0.6f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = { scope.launch { collapse() } },
+                ),
+        )
+
+        BackHandler { scope.launch { collapse() } }
+
+        // The offset sits on its own Box so the sheet can be measured before it is placed: the
+        // travel is a fraction of its own height, which is only known after the first layout.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .offset { IntOffset(0, (offset.value * heightPx.value).roundToInt()) }
+                .onSizeChanged { heightPx.intValue = it.height }
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = dragState,
+                    onDragStopped = { velocity -> scope.launch { settle(velocity) } },
+                )
+                .nestedScroll(nestedScroll),
+        ) {
+            content { collapse() }
         }
     }
 }
