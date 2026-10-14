@@ -3,6 +3,7 @@ package com.substream.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,8 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,8 +43,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.substream.data.api.Album
 import com.substream.data.api.Artist
-import org.koin.androidx.compose.koinViewModel
 import java.util.Calendar
+import org.koin.androidx.compose.koinViewModel
 
 /**
  * Spotify-shaped home: a greeting, a grid of the artists you have starred, and horizontal shelves
@@ -210,9 +211,16 @@ private fun <T> ShelfRow(
 }
 
 /**
- * Two-column grid of the starred artists, the home's shortcut row and the way into the artists
- * you care about. Built from chunked rows rather than a LazyVerticalGrid because it cannot be
- * nested in the vertical scroll with a bounded height.
+ * How many starred artists one screen of the home row holds: three rows of two.
+ */
+private const val ARTISTS_PER_PAGE = 6
+
+/**
+ * The starred artists, two to a row and three rows deep, scrolling sideways for the next screen.
+ *
+ * The grid is built from chunked rows rather than a LazyVerticalGrid because it cannot be nested
+ * in the vertical scroll with a bounded height, and the whole grid is one lazy item per screen
+ * rather than one per artist so it can scroll sideways.
  */
 @Composable
 private fun QuickPicks(
@@ -220,22 +228,40 @@ private fun QuickPicks(
     getCoverArtUrl: (String?) -> String?,
     onArtistClick: (String, String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        artists.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { artist ->
-                    QuickPickTile(
-                        artist = artist,
-                        coverArtUrl = getCoverArtUrl(artist.coverArt),
-                        onClick = { onArtistClick(artist.id, artist.name) },
-                        modifier = Modifier.weight(1f),
-                    )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // A page has to be told how wide it is: inside a LazyRow the children are measured with
+        // an unbounded width, so the two tiles could not share it.
+        val pageWidth = maxWidth - 16.dp * 2
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            // Pages are laid out one after another, so without a gap the last column of this
+            // screen sits against the first column of the next one.
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(
+                items = artists.chunked(ARTISTS_PER_PAGE),
+                key = { page -> page.first().id }
+            ) { page ->
+                Column(
+                    modifier = Modifier.width(pageWidth),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    page.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { artist ->
+                                QuickPickTile(
+                                    artist = artist,
+                                    coverArtUrl = getCoverArtUrl(artist.coverArt),
+                                    onClick = { onArtistClick(artist.id, artist.name) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            // Keeps a lone artist in the last row from stretching across it.
+                            if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
                 }
-                // Keeps a lone artist in the last row from stretching across the whole grid.
-                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
             }
         }
     }

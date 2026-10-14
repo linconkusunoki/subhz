@@ -14,9 +14,6 @@ import kotlinx.coroutines.launch
 /** How many albums each home shelf asks the server for. */
 private const val SHELF_SIZE = 20
 
-/** How many favorite artists the home grid shows. */
-private const val QUICK_PICK_COUNT = 6
-
 /** Pixel size asked of the server for home cover art, matching the 150dp shelf cards. */
 private const val COVER_SIZE = 300
 
@@ -77,11 +74,9 @@ class HomeViewModel(
                         frequentlyPlayed = frequent.await().getOrThrow().withImage(),
                         madeForYou = random.await().getOrThrow().withImage(),
                         favorites = favorites.await().getOrThrow().withImage(),
-                        // The grid at the top of the home is the starred artists, capped so it
-                        // stays a shortcut row rather than becoming a second artists list.
-                        favoriteArtists = favoriteArtists.await().getOrThrow()
-                            .withArtistImage()
-                            .take(QUICK_PICK_COUNT),
+                        // The grid at the top of the home is the starred artists. All of them are
+                        // loaded: the row scrolls, and the screen fits six at a time.
+                        favoriteArtists = favoriteArtists.await().getOrThrow().withArtistImage(),
                     )
                 )
             } catch (e: Exception) {
