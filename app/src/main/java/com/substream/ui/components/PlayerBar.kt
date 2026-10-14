@@ -40,14 +40,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.substream.player.PlayerState
-
-/** Upward drag distance (px) on the bar that counts as "expand to full screen". */
-private const val SWIPE_UP_THRESHOLD_PX = 32f
+import com.substream.ui.navigation.PullToExpand
 
 /**
  * Bottom Player Bar component displaying current playing song with playback controls.
  *
- * Tapping the bar or swiping it up expands the full screen player via [onExpand].
+ * Tapping the bar expands the full screen player via [onExpand]. Dragging it up hands the gesture
+ * to [pullToExpand] instead, so the sheet is pulled up under the finger rather than deciding for
+ * itself how far to travel.
  */
 @Composable
 fun PlayerBar(
@@ -56,7 +56,8 @@ fun PlayerBar(
     onStopClick: () -> Unit,
     getCoverArtUrl: (String?) -> String?,
     onExpand: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    pullToExpand: PullToExpand? = null,
 ) {
     val currentSong = playerState.currentSong
 
@@ -72,21 +73,30 @@ fun PlayerBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 6.dp)
-                    // Swipe up anywhere on the bar to expand, mirroring the tap. This only
-                    // engages past touch slop, so a plain tap still reaches the Card's onClick.
-                    .pointerInput(onExpand) {
-                        var dragged = 0f
+                    // Dragging the bar up opens the sheet under the finger rather than past a
+                    // threshold, so the sheet is pulled up by hand and finishes opening on
+                    // release. Gesture detection already waits for touch slop, so a plain tap
+                    // still reaches the Card's onClick.
+                    .pointerInput(pullToExpand) {
+                        val pull = pullToExpand ?: return@pointerInput
+                        var grabbed = false
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
-                                dragged += dragAmount
-                                if (dragged < -SWIPE_UP_THRESHOLD_PX) {
-                                    dragged = 0f
-                                    onExpand()
+                                if (!grabbed) {
+                                    // The gesture starts upward or not at all: the bar sits at the
+                                    // bottom of the screen, so there is nothing below it to pull
+                                    // a sheet up from.
+                                    if (dragAmount >= 0f) return@detectVerticalDragGestures
+                                    grabbed = true
+                                    pull.onGrab()
                                 }
+                                // Every delta from here on, in both directions: dragging back
+                                // down is how a change of mind is expressed.
+                                pull.onDrag(dragAmount)
                                 change.consume()
                             },
-                            onDragEnd = { dragged = 0f },
-                            onDragCancel = { dragged = 0f },
+                            onDragEnd = { if (grabbed) pull.onRelease() },
+                            onDragCancel = { if (grabbed) pull.onRelease() },
                         )
                     },
                 shape = RoundedCornerShape(16.dp),

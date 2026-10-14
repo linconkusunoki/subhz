@@ -21,9 +21,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,8 +38,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import kotlin.math.roundToInt
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -126,6 +124,28 @@ private fun MainNavScreen(
     var isPlayerExpanded by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    // Where the sheet is, shared with the mini bar so a drag can open it.
+    val playerSheet = remember { PlayerSheetState(scope) }
+
+    // Remembered, because PlayerBar keys its gesture detection on it: a new instance each
+    // recomposition would cancel and restart the gesture that is opening the sheet.
+    val pullToExpand = remember(playerSheet) {
+        object : PullToExpand {
+            override fun onGrab() {
+                // Hold it first: the sheet must not animate itself open on the way in, the
+                // finger is about to move it instead.
+                playerSheet.hold()
+                isPlayerExpanded = true
+            }
+
+            override fun onDrag(deltaY: Float) {
+                playerSheet.pull(deltaY)
+            }
+
+            override fun onRelease() = playerSheet.finishOpen()
+        }
+    }
+
     // Picks up the queue the server is holding, so the app opens on the song that was playing
     // rather than on nothing. Restored paused at the saved position: the position is the user's,
     // but starting to play it is not.
@@ -195,6 +215,7 @@ private fun MainNavScreen(
                     onStopClick = { playerManager.stop() },
                     getCoverArtUrl = { coverArt -> playerManager.getCoverArtUrl(coverArt) },
                     onExpand = { isPlayerExpanded = true },
+                    pullToExpand = pullToExpand,
                 )
 
                 NavigationBar {
@@ -326,7 +347,10 @@ private fun MainNavScreen(
 
     // Player Expandido (Now Playing), as a sheet over the whole app.
     if (isPlayerExpanded) {
-        PlayerSheet(onDismiss = { isPlayerExpanded = false }) { collapse ->
+        PlayerSheet(
+            state = playerSheet,
+            onDismiss = { isPlayerExpanded = false },
+        ) { collapse ->
             NowPlayingScreen(
                 onBackClick = { scope.launch { collapse() } },
                 // The artist line links out of the sheet, so the sheet has to be gone before
@@ -345,23 +369,8 @@ private fun MainNavScreen(
 }
 
 /**
- * The slow, interruptible travel of the player sheet, shared by the open and the close.
- *
- * Soft and slow on purpose: Material's sheet spring is quick enough to be over before the eye has
- * caught up, which is what makes a tap feel like nothing happened. Slightly under critical damping,
- * so it arrives with a hint of weight rather than a wobble.
- */
-private val PlayerSheetSpring = spring<Float>(dampingRatio = 0.95f, stiffness = 240f)
-
-/** Fling down faster than this (px/s) and the sheet is gone, wherever it had got to. */
-private const val PlayerSheetFlingAway = 1200f
-
-/** Or dragged this far down (as a fraction of its height) and it is gone too. */
-private const val PlayerSheetDismissFraction = 0.35f
-
-/**
- * Wraps the player's content in the sheet behaviour: slides up on a spring, tracks a downward
- * drag, and can be flung away.
+ * Draws the player's content inside the sheet, and owns the gestures on it: it can be pulled down,
+ * dragged, and flung away.
  *
  * Drags are handled twice over, and both halves are needed. A plain [draggable] catches the ones
  * that land on the sheet itself; a nested scroll connection catches the ones that start inside a
@@ -371,60 +380,36 @@ private const val PlayerSheetDismissFraction = 0.35f
  * drag inside the lyrics, which is the difference between a sheet you can flick away and one that
  * gets in the way of reading something.
  *
+ * Opening is not here: the sheet is either already in place (a tap on the bar let it spring up)
+ * or a finger is on it and moving it ([PlayerSheetState.finishOpen] takes it from there).
+ *
  * [onDismiss] fires once the sheet has finished travelling down, never mid-flight.
  */
 @Composable
 private fun PlayerSheet(
+    state: PlayerSheetState,
     onDismiss: () -> Unit,
     content: @Composable (collapse: suspend () -> Unit) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val offset = state.offset
 
-    // 0f is fully in place, 1f is entirely below the bottom edge. Everything is a fraction of this,
-    // so the sheet behaves the same on a phone and on a tablet.
-    val offset = remember { Animatable(1f) }
-    val heightPx = remember { mutableIntStateOf(1) }
-
-    // Travel on mount, i.e. on open. The close is not driven from here: it is always an explicit
-    // collapse() first, so that a dismissal finishes animating before the sheet leaves the tree.
-    LaunchedEffect(Unit) {
-        offset.animateTo(0f, PlayerSheetSpring)
-    }
+    // The bar's opening drag can also end in a dismissal, and that happens while the bar is the
+    // only thing awake on the sheet, so the sheet hands it its own way out.
+    SideEffect { state.onDismissed = onDismiss }
 
     // Unmount only after the sheet is off screen, so it never disappears mid-flight.
     suspend fun collapse() {
-        offset.animateTo(1f, PlayerSheetSpring)
+        state.travelTo(1f)
         onDismiss()
     }
 
-    /**
-     * Moves the sheet by [deltaPx] and reports how much of that it actually took, which is what a
-     * nested scroll connection owes its children. The move itself has to be a coroutine because
-     * [Animatable.snapTo] is suspending, so the new position is worked out here and applied there.
-     */
-    fun pull(deltaPx: Float): Float {
-        val travel = heightPx.value.toFloat()
-        if (travel <= 1f) return 0f
-        val from = offset.value
-        val to = (from + deltaPx / travel).coerceIn(0f, 1f)
-        scope.launch { offset.snapTo(to) }
-        return (to - from) * travel
+    // A drag that opened the sheet is still in progress: the finger moves it, not this.
+    LaunchedEffect(Unit) {
+        if (!state.isHeld) state.travelTo(0f)
     }
 
-    /** Where it comes to rest: flung or dragged far enough to be gone, otherwise back in place. */
-    suspend fun settle(velocityPxPerSecond: Float) {
-        if (velocityPxPerSecond > PlayerSheetFlingAway ||
-            offset.value > PlayerSheetDismissFraction
-        ) {
-            collapse()
-        } else {
-            offset.animateTo(0f, PlayerSheetSpring)
-        }
-    }
-
-    // Drags that land on the sheet itself. [nestedScroll] below covers the rest: a drag that starts
-    // inside one of the sheet's own scrollables belongs to it, and this never sees those.
-    val dragState = rememberDraggableState { delta -> pull(delta) }
+    val dragState = rememberDraggableState { delta -> state.pull(delta) }
 
     val nestedScroll = remember {
         object : NestedScrollConnection {
@@ -433,12 +418,16 @@ private fun PlayerSheet(
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
                 if (available.y <= 0f || offset.value <= 0f) return Offset.Zero
-                return Offset(0f, pull(available.y))
+                return Offset(0f, state.pull(available.y))
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 if (consumed.y <= 0f && available.y < PlayerSheetFlingAway) return Velocity.Zero
-                settle(available.y)
+                if (available.y > PlayerSheetFlingAway || offset.value > PlayerSheetDismissFraction) {
+                    collapse()
+                } else {
+                    state.travelTo(0f)
+                }
                 return available
             }
         }
@@ -465,12 +454,19 @@ private fun PlayerSheet(
         Box(
             Modifier
                 .fillMaxSize()
-                .offset { IntOffset(0, (offset.value * heightPx.value).roundToInt()) }
-                .onSizeChanged { heightPx.intValue = it.height }
+                .offset { IntOffset(0, (offset.value * state.heightPx).roundToInt()) }
+                .onSizeChanged { state.measure(it.height) }
                 .draggable(
                     orientation = Orientation.Vertical,
                     state = dragState,
-                    onDragStopped = { velocity -> scope.launch { settle(velocity) } },
+                    onDragStarted = { state.hold() },
+                    onDragStopped = { velocity ->
+                        if (velocity > PlayerSheetFlingAway || offset.value > PlayerSheetDismissFraction) {
+                            scope.launch { collapse() }
+                        } else {
+                            state.finishDrag(velocity)
+                        }
+                    },
                 )
                 .nestedScroll(nestedScroll),
         ) {
