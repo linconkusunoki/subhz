@@ -23,6 +23,7 @@ data class SubsonicResponse(
     val version: String,
     val albumList2: AlbumListContainer? = null,
     val album: AlbumDetail? = null,
+    val playlist: Playlist? = null,
     val artist: ArtistDetail? = null,
     val searchResult3: SearchResult3? = null,
     val artists: ArtistsContainer? = null,
@@ -82,8 +83,16 @@ data class Playlist(
     val name: String,
     val coverArt: String? = null,
     val songCount: Int? = null,
-    val owner: String? = null
-)
+    val owner: String? = null,
+    val comment: String? = null,
+    val duration: Int? = null,
+    /** Only getPlaylist.view sends the tracks; getPlaylists.view sends a summary without them. */
+    val entry: List<Song> = emptyList(),
+    val starred: String? = null,
+    val userRating: Int? = null
+) {
+    val isStarred: Boolean get() = starred != null
+}
 
 /**
  * The queue the server holds for this user, from getPlayQueue.view.
@@ -232,6 +241,56 @@ interface SubsonicApiService {
         @Query("artistCount") artistCount: Int = 20,
         @Query("albumCount") albumCount: Int = 20,
         @Query("songCount") songCount: Int = 20,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    @GET("rest/getPlaylist.view")
+    suspend fun getPlaylist(
+        @Query("id") playlistId: String,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Creates a playlist, optionally from song ids.
+     *
+     * This doubles as the update call: the spec has updatePlaylist.view for that, but servers
+     * disagree about which one they honour, and sending playlistId to this one is what every
+     * Subsonic client in the wild does.
+     */
+    @FormUrlEncoded
+    @POST("rest/createPlaylist.view")
+    suspend fun createPlaylist(
+        @Field("name") name: String,
+        @Field("songId") songIds: List<String> = emptyList(),
+        @Field("playlistId") playlistId: String? = null,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    /**
+     * Changes an existing playlist. Only the removals are used here: the spec's add and rename go
+     * through createPlaylist.view, which every server implements, while this one is patchier.
+     */
+    @FormUrlEncoded
+    @POST("rest/updatePlaylist.view")
+    suspend fun updatePlaylist(
+        @Field("playlistId") playlistId: String,
+        @Field("songIdToAdd") songIdToAdd: List<String> = emptyList(),
+        @Field("songIndexToRemove") songIndexToRemove: List<Int> = emptyList(),
+        @Field("name") name: String? = null,
+        @Query("v") version: String = "1.16.1",
+        @Query("c") client: String = "SubStream",
+        @Query("f") format: String = "json"
+    ): SubsonicResponseWrapper
+
+    @GET("rest/deletePlaylist.view")
+    suspend fun deletePlaylist(
+        @Query("id") playlistId: String,
         @Query("v") version: String = "1.16.1",
         @Query("c") client: String = "SubStream",
         @Query("f") format: String = "json"

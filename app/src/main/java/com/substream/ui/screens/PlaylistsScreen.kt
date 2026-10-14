@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.substream.ui.components.LoadState
 import com.substream.data.api.Playlist
 
 /**
@@ -35,6 +36,7 @@ import com.substream.data.api.Playlist
 fun PlaylistsScreen(
     state: LoadState<Playlist>,
     onRetry: () -> Unit,
+    onPlaylistClick: (Playlist) -> Unit,
     getCoverArtUrl: (String?) -> String?,
 ) {
     LoadStateContent(
@@ -53,6 +55,7 @@ fun PlaylistsScreen(
                 PlaylistCard(
                     playlist = playlist,
                     coverArtUrl = getCoverArtUrl(playlist.coverArt ?: playlist.id),
+                    onClick = { onPlaylistClick(playlist) },
                 )
             }
         }
@@ -63,9 +66,11 @@ fun PlaylistsScreen(
 private fun PlaylistCard(
     playlist: Playlist,
     coverArtUrl: String?,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
+        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),

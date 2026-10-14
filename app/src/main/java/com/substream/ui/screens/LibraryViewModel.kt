@@ -2,6 +2,7 @@ package com.substream.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
 import com.substream.data.api.Artist
 import com.substream.data.api.Playlist
@@ -11,16 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/**
- * Generic async list state shared by the Library sections (artists, playlists, favorites).
- */
-sealed interface LoadState<out T> {
-    data object Idle : LoadState<Nothing>
-    data object Loading : LoadState<Nothing>
-    data class Success<T>(val items: List<T>) : LoadState<T>
-    data class Error(val message: String) : LoadState<Nothing>
-}
 
 /**
  * ViewModel backing LibraryScreen: artists (getArtists.view), playlists (getPlaylists.view)

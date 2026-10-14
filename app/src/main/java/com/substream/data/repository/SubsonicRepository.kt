@@ -178,6 +178,74 @@ class SubsonicRepository(
     }
 
     /**
+     * Reads one playlist with its tracks (getPlaylist.view). getPlaylists.view sends the same
+     * playlists without the tracks, which is why the list screen is not enough.
+     */
+    suspend fun getPlaylist(playlistId: String): Result<Playlist> = call {
+        api.getPlaylist(playlistId = playlistId).subsonicResponse.playlist
+            ?: throw IOException("Playlist details not found in server response")
+    }
+
+    /**
+     * Creates a playlist, optionally seeded with songs.
+     */
+    suspend fun createPlaylist(name: String, songIds: List<String> = emptyList()): Result<Playlist> = call {
+        val response = api.createPlaylist(name = name, songIds = songIds).subsonicResponse
+        response.playlist
+            ?: throw IOException(response.error?.message ?: "The server did not return the new playlist")
+    }
+
+    /**
+     * Renames a playlist. The server replaces the whole tracklist when song ids are sent, so the
+     * rename deliberately sends none: that keeps the tracks.
+     */
+    suspend fun renamePlaylist(playlistId: String, name: String): Result<Playlist> = call {
+        val response = api.createPlaylist(name = name, playlistId = playlistId).subsonicResponse
+        response.playlist
+            ?: throw IOException(response.error?.message ?: "The server did not return the playlist")
+    }
+
+    /**
+     * Appends songs to a playlist. createPlaylist.view with a playlistId and no song ids is the
+     * rename; with song ids and no name it is the add, which is how every client does it.
+     */
+    suspend fun addSongsToPlaylist(playlistId: String, songIds: List<String>): Result<Unit> = call {
+        if (songIds.isEmpty()) return@call Unit
+        val response = api.createPlaylist(
+            name = "",
+            songIds = songIds,
+            playlistId = playlistId,
+        ).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "Could not add to the playlist")
+        }
+    }
+
+    /**
+     * Removes one track from a playlist. updatePlaylist.view is the only call that takes a
+     * position rather than a song id, and positions are what the call needs.
+     */
+    suspend fun removeSongFromPlaylist(playlistId: String, index: Int): Result<Unit> = call {
+        val response = api.updatePlaylist(
+            playlistId = playlistId,
+            songIndexToRemove = listOf(index)
+        ).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "Could not remove the song")
+        }
+    }
+
+    /**
+     * Deletes a playlist.
+     */
+    suspend fun deletePlaylist(playlistId: String): Result<Unit> = call {
+        val response = api.deletePlaylist(playlistId = playlistId).subsonicResponse
+        if (response.status != "ok") {
+            throw IOException(response.error?.message ?: "Could not delete the playlist")
+        }
+    }
+
+    /**
      * Reads the queue the server is holding for this user, for carrying on from another device.
      *
      * An empty result is not an error: it is what a server that has no queue yet, or one that does

@@ -44,6 +44,7 @@ import com.substream.ui.screens.HomeScreen
 import com.substream.ui.screens.LibraryScreen
 import com.substream.ui.screens.LoginScreen
 import com.substream.ui.screens.NowPlayingScreen
+import com.substream.ui.screens.PlaylistDetailScreen
 import com.substream.ui.screens.SearchScreen
 import com.substream.ui.screens.SettingsScreen
 import kotlinx.coroutines.launch
@@ -229,6 +230,9 @@ private fun MainNavScreen(
                             navController.navigate(Screen.AlbumDetail.createRoute(album.id))
                         },
                         onArtistClick = navigateToArtist,
+                        onPlaylistClick = { playlist ->
+                            navController.navigate(Screen.PlaylistDetail.createRoute(playlist.id))
+                        },
                     )
                 }
 
@@ -265,7 +269,21 @@ private fun MainNavScreen(
                     )
                 }
 
-                // 6. Artist Detail (with artistId argument)
+                // 6. Playlist Detail (with playlistId argument)
+                composable(
+                    route = Screen.PlaylistDetail.route,
+                    arguments = listOf(
+                        navArgument(Screen.PlaylistDetail.ARG_PLAYLIST_ID) { type = NavType.StringType },
+                    ),
+                ) {
+                    val playlistId = it.arguments?.getString(Screen.PlaylistDetail.ARG_PLAYLIST_ID) ?: ""
+                    PlaylistDetailScreen(
+                        playlistId = playlistId,
+                        onBackClick = { navController.popBackStack() },
+                    )
+                }
+
+                // 7. Artist Detail (with artistId argument)
                 composable(
                     route = Screen.ArtistDetail.route,
                     arguments = listOf(

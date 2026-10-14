@@ -11,12 +11,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
 import com.substream.data.api.Artist
 import com.substream.data.api.Song
+import com.substream.ui.components.AddToPlaylistSheet
 import com.substream.ui.components.SongsList
 
 /** Sub-tabs of the Favorites hub. */
@@ -48,6 +51,7 @@ fun FavoritesScreen(
     getCoverArtUrl: (String?) -> String?,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var addingToPlaylist by remember { mutableStateOf<Song?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = selectedTab) {
@@ -100,9 +104,12 @@ fun FavoritesScreen(
                         onSongClick = onSongClick,
                         getCoverArtUrl = getCoverArtUrl,
                         onToggleStar = onToggleStarSong,
+                        onAddToPlaylist = { song -> addingToPlaylist = song },
                     )
                 }
             }
         }
     }
+
+    AddToPlaylistSheet(song = addingToPlaylist, onDismiss = { addingToPlaylist = null })
 }

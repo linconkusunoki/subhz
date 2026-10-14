@@ -25,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
+import com.substream.data.api.Playlist
 import com.substream.player.PlayerManager
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -40,6 +42,7 @@ import org.koin.compose.koinInject
 fun LibraryScreen(
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (String, String) -> Unit = { _, _ -> },
+    onPlaylistClick: (Playlist) -> Unit = {},
     viewModel: LibraryViewModel = koinViewModel(),
     playerManager: PlayerManager = koinInject(),
 ) {
@@ -123,6 +126,7 @@ fun LibraryScreen(
                 LibraryTab.Playlists -> PlaylistsScreen(
                     state = playlistsState,
                     onRetry = viewModel::loadPlaylists,
+                    onPlaylistClick = { playlist -> onPlaylistClick(playlist) },
                     getCoverArtUrl = viewModel::getCoverArtUrl,
                 )
 

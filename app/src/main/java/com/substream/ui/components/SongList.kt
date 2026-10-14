@@ -1,7 +1,7 @@
 package com.substream.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
@@ -48,6 +49,8 @@ fun SongsList(
     getCoverArtUrl: (String?) -> String?,
     modifier: Modifier = Modifier,
     onToggleStar: ((Song) -> Unit)? = null,
+    onRemove: ((Song) -> Unit)? = null,
+    onAddToPlaylist: ((Song) -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
     LazyColumn(
@@ -64,16 +67,22 @@ fun SongsList(
                 coverArtUrl = getCoverArtUrl(song.coverArt),
                 onClick = { onSongClick(song) },
                 onToggleStar = onToggleStar?.let { toggle -> { toggle(song) } },
+                onRemove = onRemove?.let { remove -> { remove(song) } },
+                onLongClick = onAddToPlaylist?.let { add -> { add(song) } },
             )
         }
     }
 }
 
 /**
- * One song as a row: artwork, title, artist, length and the star.
+ * One song as a row: artwork, title, artist, length and one trailing action.
  *
  * The artist is plain text rather than a link, for the reason the album rows are: the row is one
  * tap target and a nested one only misleads the finger.
+ *
+ * [onToggleStar] and [onRemove] occupy the same slot; a caller asks for one. A track inside a
+ * playlist offers removal rather than a star, because what the user wants there is not "favourite
+ * this" but "get this out of here", and two buttons at the end of the row is one too many.
  */
 @Composable
 fun SongRow(
@@ -82,11 +91,19 @@ fun SongRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onToggleStar: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                // Long press is where "add to playlist" lives: another button on a row that
+                // already carries three tap targets is one more thing to miss.
+                onLongClick = onLongClick,
+                onLongClickLabel = if (onLongClick != null) "Add to playlist" else null,
+            )
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -131,12 +148,20 @@ fun SongRow(
             color = MaterialTheme.colorScheme.outline
         )
 
-        if (onToggleStar != null) {
-            IconButton(onClick = onToggleStar) {
+        when {
+            onToggleStar != null -> IconButton(onClick = onToggleStar) {
                 Icon(
                     imageVector = if (song.isStarred) Icons.Filled.Star else Icons.Outlined.StarOutline,
                     contentDescription = if (song.isStarred) "Unfavorite" else "Favorite",
                     tint = if (song.isStarred) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            onRemove != null -> IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Remove from playlist",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

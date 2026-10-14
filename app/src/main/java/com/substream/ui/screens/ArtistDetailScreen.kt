@@ -2,6 +2,7 @@ package com.substream.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,9 +59,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.substream.ui.components.LoadState
 import com.substream.data.api.Album
 import com.substream.data.api.ArtistDetail
 import com.substream.data.api.Song
+import com.substream.ui.components.AddToPlaylistSheet
 import com.substream.ui.components.formatSongDuration
 import com.substream.player.PlayerManager
 import org.koin.androidx.compose.koinViewModel
@@ -92,10 +96,13 @@ fun ArtistDetailScreen(
     playerManager: PlayerManager = koinInject(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var addingToPlaylist by remember { mutableStateOf<Song?>(null) }
 
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
     }
+
+    AddToPlaylistSheet(song = addingToPlaylist, onDismiss = { addingToPlaylist = null })
 
     Scaffold(
         contentWindowInsets = WindowInsets(0.dp),
@@ -160,6 +167,7 @@ fun ArtistDetailScreen(
                         },
                         onToggleStarArtist = { viewModel.toggleStarArtist(state.artistDetail) },
                         onToggleStarSong = viewModel::toggleStarSong,
+                        onAddToPlaylist = { song -> addingToPlaylist = song },
                         onPlayAll = { songs -> playerManager.playSongs(songs) },
                         onShuffleAll = { songs -> playerManager.playSongs(songs.shuffled()) },
                     )
@@ -196,6 +204,7 @@ private fun ArtistDetailContent(
     onSongClick: (Song) -> Unit,
     onToggleStarArtist: () -> Unit,
     onToggleStarSong: (Song) -> Unit,
+    onAddToPlaylist: (Song) -> Unit,
     onPlayAll: (List<Song>) -> Unit,
     onShuffleAll: (List<Song>) -> Unit,
     modifier: Modifier = Modifier,
@@ -278,6 +287,7 @@ private fun ArtistDetailContent(
                                         song = row.song,
                                         onSongClick = onSongClick,
                                         onToggleStarSong = { onToggleStarSong(row.song) },
+                                        onAddToPlaylist = { onAddToPlaylist(row.song) },
                                     )
                                 }
                             }
@@ -530,12 +540,18 @@ private fun ArtistSongRow(
     song: Song,
     onSongClick: (Song) -> Unit,
     onToggleStarSong: () -> Unit,
+    onAddToPlaylist: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onSongClick(song) }
+            // Long press adds to a playlist; the tap plays.
+            .combinedClickable(
+                onClick = { onSongClick(song) },
+                onLongClick = onAddToPlaylist,
+                onLongClickLabel = "Add to playlist",
+            )
             // No vertical padding: the star button's 48dp minimum touch target already sets the
             // row height, and padding on top of it only opens a gap between the titles.
             .padding(horizontal = 16.dp),
