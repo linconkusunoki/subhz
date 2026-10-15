@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import android.util.Log
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -123,18 +124,32 @@ private fun MainNavScreen(
     // it up rather than being shown one.
     var isPlayerExpanded by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-
-    // Where the sheet is, shared with the mini bar so a drag can open it.
     val playerSheet = remember { PlayerSheetState(scope) }
+
+    suspend fun collapseSheet() {
+        playerSheet.travelTo(1f)
+        isPlayerExpanded = false
+    }
+
+    suspend fun expandSheet() {
+        isPlayerExpanded = true
+        playerSheet.travelTo(0f)
+    }
+
+    SideEffect {
+        playerSheet.onDismissed = {
+            scope.launch { collapseSheet() }
+        }
+    }
 
     // Remembered, because PlayerBar keys its gesture detection on it: a new instance each
     // recomposition would cancel and restart the gesture that is opening the sheet.
     val pullToExpand = remember(playerSheet) {
         object : PullToExpand {
-            override fun onGrab() {
+            override fun onGrab(fromTopPx: Float) {
                 // Hold it first: the sheet must not animate itself open on the way in, the
                 // finger is about to move it instead.
-                playerSheet.hold()
+                playerSheet.beginOpening(fromTopPx)
                 isPlayerExpanded = true
             }
 
@@ -214,7 +229,9 @@ private fun MainNavScreen(
                     onPlayPauseClick = { playerManager.togglePlayPause() },
                     onStopClick = { playerManager.stop() },
                     getCoverArtUrl = { coverArt -> playerManager.getCoverArtUrl(coverArt) },
-                    onExpand = { isPlayerExpanded = true },
+                    onExpand = {
+                        scope.launch { expandSheet() }
+                    },
                     pullToExpand = pullToExpand,
                 )
 
@@ -349,16 +366,16 @@ private fun MainNavScreen(
     if (isPlayerExpanded) {
         PlayerSheet(
             state = playerSheet,
-            onDismiss = { isPlayerExpanded = false },
-        ) { collapse ->
+            onClose = { scope.launch { collapseSheet() } },
+        ) {
             NowPlayingScreen(
-                onBackClick = { scope.launch { collapse() } },
+                onBackClick = { scope.launch { collapseSheet() } },
                 // The artist line links out of the sheet, so the sheet has to be gone before
                 // navigating or it stays on top of the artist screen it just opened. Collapsing
                 // before navigating is what makes the ordering correct.
                 onArtistClick = { artistId, _ ->
                     scope.launch {
-                        collapse()
+                        collapseSheet()
                         navController.navigate(Screen.ArtistDetail.createRoute(artistId))
                     }
                 },
@@ -388,26 +405,10 @@ private fun MainNavScreen(
 @Composable
 private fun PlayerSheet(
     state: PlayerSheetState,
-    onDismiss: () -> Unit,
-    content: @Composable (collapse: suspend () -> Unit) -> Unit,
+    onClose: () -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val offset = state.offset
-
-    // The bar's opening drag can also end in a dismissal, and that happens while the bar is the
-    // only thing awake on the sheet, so the sheet hands it its own way out.
-    SideEffect { state.onDismissed = onDismiss }
-
-    // Unmount only after the sheet is off screen, so it never disappears mid-flight.
-    suspend fun collapse() {
-        state.travelTo(1f)
-        onDismiss()
-    }
-
-    // A drag that opened the sheet is still in progress: the finger moves it, not this.
-    LaunchedEffect(Unit) {
-        if (!state.isHeld) state.travelTo(0f)
-    }
 
     val dragState = rememberDraggableState { delta -> state.pull(delta) }
 
@@ -421,14 +422,24 @@ private fun PlayerSheet(
                 return Offset(0f, state.pull(available.y))
             }
 
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                if (consumed.y <= 0f && available.y < PlayerSheetFlingAway) return Velocity.Zero
-                if (available.y > PlayerSheetFlingAway || offset.value > PlayerSheetDismissFraction) {
-                    collapse()
-                } else {
-                    state.travelTo(0f)
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (available.y > 0f) {
+                    return Offset(0f, state.pull(available.y))
                 }
-                return available
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (offset.value > 0f) {
+                    state.finishDrag(available.y)
+                    return available
+                }
+                return Velocity.Zero
             }
         }
     }
@@ -443,11 +454,11 @@ private fun PlayerSheet(
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },
-                    onClick = { scope.launch { collapse() } },
+                    onClick = onClose,
                 ),
         )
 
-        BackHandler { scope.launch { collapse() } }
+        BackHandler { onClose() }
 
         // The offset sits on its own Box so the sheet can be measured before it is placed: the
         // travel is a fraction of its own height, which is only known after the first layout.
@@ -461,16 +472,12 @@ private fun PlayerSheet(
                     state = dragState,
                     onDragStarted = { state.hold() },
                     onDragStopped = { velocity ->
-                        if (velocity > PlayerSheetFlingAway || offset.value > PlayerSheetDismissFraction) {
-                            scope.launch { collapse() }
-                        } else {
-                            state.finishDrag(velocity)
-                        }
+                        state.finishDrag(velocity)
                     },
                 )
                 .nestedScroll(nestedScroll),
         ) {
-            content { collapse() }
+            content()
         }
     }
 }

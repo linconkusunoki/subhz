@@ -1,8 +1,10 @@
 package com.substream.ui.navigation
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -37,6 +39,17 @@ internal class PlayerSheetState(private val scope: CoroutineScope) {
     var heightPx by mutableIntStateOf(1)
         private set
 
+    /**
+     * How far the sheet has to travel for the drag that is opening it, measured from where the
+     * finger took hold rather than from the bottom of the screen.
+     *
+     * The finger is partway up the screen already when it grabs the bar, so the sheet starts
+     * under the finger and ends at the top of the screen. Measured against the sheet's own
+     * height instead, the first couple of hundred pixels of every opening drag were spent below
+     * the bottom edge where nothing can be seen, which is most of a short flick.
+     */
+    private var openingTravelPx by mutableFloatStateOf(0f)
+
     /** A finger is on the sheet. While this holds, the sheet animates nothing by itself. */
     var isHeld by mutableStateOf(false)
         private set
@@ -49,6 +62,13 @@ internal class PlayerSheetState(private val scope: CoroutineScope) {
         isHeld = true
     }
 
+    /** Called by the bar when a finger takes hold, with that finger's distance from the top. */
+    fun beginOpening(travelPx: Float) {
+        android.util.Log.d("Open", "grab travel=$travelPx")
+        openingTravelPx = travelPx
+        isHeld = true
+    }
+
     /**
      * Moves the sheet by [deltaPx], positive downwards, and reports how much of that it took.
      *
@@ -56,8 +76,11 @@ internal class PlayerSheetState(private val scope: CoroutineScope) {
      * there; that is also why this can report a distance rather than just taking one.
      */
     fun pull(deltaPx: Float): Float {
-        val travel = heightPx.toFloat()
-        if (travel <= 1f) return 0f
+        val travel = when {
+            openingTravelPx > 1f && isHeld -> openingTravelPx
+            heightPx > 1 -> heightPx.toFloat()
+            else -> return 0f
+        }
         val from = offset.value
         val to = (from + deltaPx / travel).coerceIn(0f, 1f)
         scope.launch { offset.snapTo(to) }
@@ -73,15 +96,11 @@ internal class PlayerSheetState(private val scope: CoroutineScope) {
      */
     fun finishOpen() {
         isHeld = false
+        openingTravelPx = 0f
         if (offset.value <= PlayerSheetAbandonedFraction) {
             scope.launch { offset.animateTo(0f, PlayerSheetSpring) }
         } else {
-            // Taken back down to where it started: the sheet never wanted to be here, so it has
-            // to be taken out of the tree rather than left sitting on the app, invisible.
-            scope.launch {
-                offset.animateTo(1f, PlayerSheetSpring)
-                onDismissed()
-            }
+            onDismissed()
         }
     }
 
@@ -93,13 +112,21 @@ internal class PlayerSheetState(private val scope: CoroutineScope) {
         isHeld = false
         val dismissing = velocityPxPerSecond > PlayerSheetFlingAway ||
             offset.value > PlayerSheetDismissFraction
-        scope.launch { offset.animateTo(if (dismissing) 1f else 0f, PlayerSheetSpring) }
+        if (dismissing) {
+            onDismissed()
+        } else {
+            scope.launch { offset.animateTo(0f, PlayerSheetSpring) }
+        }
     }
 
     /** Travel on its own, for the tap that opens the sheet and the chevron that closes it. */
     suspend fun travelTo(target: Float) {
         isHeld = false
+        openingTravelPx = 0f
         offset.animateTo(target, PlayerSheetSpring)
+        if (target == 1f) {
+            offset.snapTo(1f)
+        }
     }
 }
 
@@ -129,8 +156,13 @@ internal const val PlayerSheetAbandonedFraction = 0.9f
 
 /** What the mini bar's swipe does to open the sheet, as the sheet understands it. */
 interface PullToExpand {
-    /** The drag has begun: bring the sheet to life under the finger, without animating it. */
-    fun onGrab()
+    /**
+     * The drag has begun: bring the sheet to life under the finger, without animating it.
+     *
+     * [fromTopPx] is where along the screen the finger took hold, so the sheet starts there
+     * instead of below the bottom edge where the drag would be invisible.
+     */
+    fun onGrab(fromTopPx: Float)
 
     /** Move the sheet with the finger, [deltaY] pixels, positive downwards. */
     fun onDrag(deltaY: Float)

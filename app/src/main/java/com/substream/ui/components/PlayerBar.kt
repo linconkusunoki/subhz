@@ -29,12 +29,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,44 +66,59 @@ fun PlayerBar(
 ) {
     val currentSong = playerState.currentSong
 
+    // Where the bar sits on the screen, which is where a drag on it starts and therefore how far
+    // the sheet has left to travel to be fully open.
+    var barTopOnScreen by remember { mutableFloatStateOf(0f) }
+
     AnimatedVisibility(
         visible = currentSong != null,
         enter = slideInVertically(initialOffsetY = { it }),
         exit = slideOutVertically(targetOffsetY = { it }),
-        modifier = modifier
+        // On the wrapper rather than the Card, so the gesture covers the bar's whole footprint
+        // and not only the card inset by its own padding.
+        modifier = modifier.then(
+            if (pullToExpand == null) Modifier else Modifier.onGloballyPositioned {
+                barTopOnScreen = it.positionInWindow().y
+            }.pointerInput(pullToExpand) {
+                val pull = pullToExpand
+                var grabbed = false
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, dragAmount ->
+                        if (!grabbed) {
+                            // Any vertical drag claims the sheet, not only an upward one: a finger
+                            // rarely starts moving in exactly one direction, and by the time it
+                            // has settled into one the first delta is gone. A drag that turns out
+                            // to be downward moves nothing and releases into nothing.
+                            grabbed = true
+                            pull.onGrab(barTopOnScreen)
+                        }
+                        // Every delta from here on, in both directions: dragging back down is how
+                        // a change of mind is expressed.
+                        pull.onDrag(dragAmount)
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        if (grabbed) {
+                            grabbed = false
+                            pull.onRelease()
+                        }
+                    },
+                    onDragCancel = {
+                        if (grabbed) {
+                            grabbed = false
+                            pull.onRelease()
+                        }
+                    },
+                )
+            },
+        ),
     ) {
         if (currentSong != null) {
             Card(
                 onClick = onExpand,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    // Dragging the bar up opens the sheet under the finger rather than past a
-                    // threshold, so the sheet is pulled up by hand and finishes opening on
-                    // release. Gesture detection already waits for touch slop, so a plain tap
-                    // still reaches the Card's onClick.
-                    .pointerInput(pullToExpand) {
-                        val pull = pullToExpand ?: return@pointerInput
-                        var grabbed = false
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                if (!grabbed) {
-                                    // The gesture starts upward or not at all: the bar sits at the
-                                    // bottom of the screen, so there is nothing below it to pull
-                                    // a sheet up from.
-                                    if (dragAmount >= 0f) return@detectVerticalDragGestures
-                                    grabbed = true
-                                    pull.onGrab()
-                                }
-                                // Every delta from here on, in both directions: dragging back
-                                // down is how a change of mind is expressed.
-                                pull.onDrag(dragAmount)
-                                change.consume()
-                            },
-                            onDragEnd = { if (grabbed) pull.onRelease() },
-                            onDragCancel = { if (grabbed) pull.onRelease() },
-                        )
-                    },
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
