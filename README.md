@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="app/src/main/ic_launcher-playstore.png" width="128" height="128" alt="SubStream app icon" />
+<img src="app/src/main/ic_launcher-playstore.png" width="128" height="128" alt="SubHz app icon" />
 
-# SubStream
+# SubHz
 
 **A native Android music client for your own Subsonic-compatible server.**
 
@@ -15,7 +15,7 @@ speaking the Subsonic API. No account, no cloud, no closed format.
 [![Media3](https://img.shields.io/badge/ExoPlayer-Media3%201.11-FF6D00?logo=googleplay&logoColor=white)](https://developer.android.com/media/media3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-### [Download the APK](https://github.com/linconkusunoki/substream/releases/latest/download/SubStream.apk) · [All releases](https://github.com/linconkusunoki/substream/releases)
+### [Download the APK](https://github.com/linconkusunoki/substream/releases/latest/download/SubHz.apk) · [All releases](https://github.com/linconkusunoki/substream/releases)
 
 </div>
 
@@ -25,10 +25,10 @@ speaking the Subsonic API. No account, no cloud, no closed format.
 
 Grab the latest signed APK and install it on your phone:
 
-**[Download SubStream.apk (latest release)](https://github.com/linconkusunoki/substream/releases/latest/download/SubStream.apk)**
+**[Download SubHz.apk (latest release)](https://github.com/linconkusunoki/substream/releases/latest/download/SubHz.apk)**
 
 - Requires **Android 7.0 (API 24)** or newer.
-- Because SubStream is self-published (not on Google Play), your device will ask you to allow
+- Because SubHz is self-published (not on Google Play), your device will ask you to allow
   installing apps from **unknown sources** — that's expected for any sideloaded app. Google Play
   Protect may also warn that the publisher is unknown; choose **Install anyway**.
 - Every release is signed with the same key, so updates install cleanly over the top — no need to
@@ -38,7 +38,7 @@ Prefer to build it yourself? See [Getting started](#getting-started).
 
 ## Why
 
-Self-hosted music deserves a first-class phone app. SubStream is a single-module, fully-Compose
+Self-hosted music deserves a first-class phone app. SubHz is a single-module, fully-Compose
 Android app that talks straight to your server over the Subsonic REST API — no intermediate
 service, no sync proxy, nothing of yours stored outside the device.
 
@@ -117,7 +117,7 @@ unsigned.
      -keystore substream-release.jks -alias substream \
      -keyalg RSA -keysize 2048 -validity 10000 \
      -storepass YOUR_STORE_PASS -keypass YOUR_KEY_PASS \
-     -dname "CN=SubStream, OU=Dev, O=SubStream, C=US"
+     -dname "CN=SubHz, OU=Dev, O=SubHz, C=US"
    ```
 
 2. Add the four secrets to the repo (Settings → Secrets and variables → Actions), base64-encoding
@@ -144,8 +144,8 @@ unsigned.
 ## Project structure
 
 ```
-app/src/main/java/com/substream/
-├── MainActivity.kt, SubstreamApp.kt
+app/src/main/java/com/subhz/
+├── MainActivity.kt, SubHzApp.kt
 ├── data/
 │   ├── api/         Subsonic REST models, Retrofit service, auth + interceptors
 │   ├── preferences/ Server config and credential storage

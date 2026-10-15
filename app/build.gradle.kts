@@ -21,13 +21,13 @@ val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
     !signingKeyPassword.isNullOrBlank()
 
 android {
-    namespace = "com.substream"
+    namespace = "com.subhz"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.substream"
+        applicationId = "com.subhz"
         minSdk = 24
         targetSdk = 37
         versionCode = 1

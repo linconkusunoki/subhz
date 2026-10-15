@@ -2,12 +2,23 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-      <SelectionState runConfigName="SubStream">
+      <SelectionState runConfigName="SubHz">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-10-01T16:57:37.873558Z">
+        <DropdownSelection timestamp="2026-10-14T15:24:11.747946Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="Wireless" identifier="serviceName=adb-RFCY61R000F-B85lek" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=RFCY61R000F" />
+            </handle>
+          </Target>
+        </DropdownSelection>
+        <DialogSelection />
+      </SelectionState>
+      <SelectionState runConfigName="app">
+        <option name="selectionMode" value="DROPDOWN" />
+        <DropdownSelection timestamp="2026-10-14T15:24:11.747946Z">
+          <Target type="DEFAULT_BOOT">
+            <handle>
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=RFCY61R000F" />
             </handle>
           </Target>
         </DropdownSelection>

@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SubStream"
+rootProject.name = "SubHz"
 include(":app")

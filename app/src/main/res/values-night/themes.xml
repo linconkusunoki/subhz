@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark counterpart of Theme.SubStream: keeps the window background (and the
+    <!-- Dark counterpart of Theme.SubHz: keeps the window background (and the
          launch frame before Compose draws) from flashing white in dark mode. -->
-    <style name="Theme.SubStream" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.SubHz" parent="android:Theme.Material.NoActionBar" />
 </resources>

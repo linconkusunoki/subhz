@@ -89,16 +89,16 @@ jobs:
           STAGE="$RUNNER_TEMP/stage"
           mkdir -p "$STAGE"
           # Stable name powers the README's always-valid "latest" download link.
-          cp "$SRC" "$STAGE/SubStream.apk"
+          cp "$SRC" "$STAGE/SubHz.apk"
           # Versioned name is handy for release history.
-          cp "$SRC" "$STAGE/SubStream-${VERSION}.apk"
+          cp "$SRC" "$STAGE/SubHz-${VERSION}.apk"
           echo "dir=$STAGE" >> "$GITHUB_OUTPUT"
           echo "Staged APKs for version: $VERSION (signed=${{ steps.signing.outputs.signed }})"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: substream-apk
+          name: subhz-apk
           path: ${{ steps.apk.outputs.dir }}/*.apk
           if-no-files-found: error
 
@@ -107,7 +107,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: SubStream ${{ github.ref_name }}
+          name: SubHz ${{ github.ref_name }}
           files: ${{ steps.apk.outputs.dir }}/*.apk
           generate_release_notes: true
           fail_on_unmatched_files: true
