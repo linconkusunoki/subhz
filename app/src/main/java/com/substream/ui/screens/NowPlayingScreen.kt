@@ -22,6 +22,9 @@ import androidx.compose.material.icons.filled.MusicNote
 import com.substream.ui.components.LyricsPanel
 import com.substream.ui.components.RatingBar
 import com.substream.ui.components.RatingViewModel
+import com.substream.ui.components.WaveformSeekBar
+import com.substream.ui.components.WaveformState
+import com.substream.ui.components.WaveformViewModel
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -48,11 +51,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -67,6 +71,7 @@ import com.substream.player.PlayerManager
 import com.substream.player.PlayerState
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import kotlinx.coroutines.isActive
 import java.util.Locale
 
 /**
@@ -81,10 +86,12 @@ fun NowPlayingScreen(
     onArtistClick: (String, String) -> Unit = { _, _ -> },
     playerManager: PlayerManager = koinInject(),
     ratingViewModel: RatingViewModel = koinViewModel(),
+    waveformViewModel: WaveformViewModel = koinViewModel(),
     modifier: Modifier = Modifier
 ) {
     val playerState by playerManager.playerState.collectAsState()
     val currentSong = playerState.currentSong
+    val waveformState by waveformViewModel.state.collectAsState()
 
     // Lyrics stand in for the artwork rather than sitting under it, so only one of the two is ever
     // on screen and the controls below stay where the thumb is.
@@ -98,6 +105,12 @@ fun NowPlayingScreen(
         if (currentSong == null) {
             onBackClick()
         }
+    }
+
+    // Analyse whatever is playing. Decoding is expensive, so this only follows the track id; the
+    // slider stays up until the peaks arrive.
+    LaunchedEffect(currentSong?.id) {
+        currentSong?.let { waveformViewModel.load(it) }
     }
 
     Scaffold(
@@ -223,6 +236,13 @@ fun NowPlayingScreen(
                 // 3. Interactive Slider & Time Display
                 PlaybackProgressSection(
                     playerState = playerState,
+                    peaks = when (val state = waveformState) {
+                        is WaveformState.Loaded -> state.peaks
+                        WaveformState.Unavailable -> null
+                        // Null is the frame before the load effect runs; treat it as analysing
+                        // rather than flashing a slider that is about to be replaced.
+                        null, WaveformState.Loading -> EMPTY_PEAKS
+                    },
                     onSeek = { positionMs -> playerManager.seekTo(positionMs) }
                 )
 
@@ -320,37 +340,108 @@ private fun SongInfoSection(
 @Composable
 private fun PlaybackProgressSection(
     playerState: PlayerState,
+    peaks: FloatArray?,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isUserDragging by remember { mutableStateOf(false) }
+    // Fraction of the track the finger is on while scrubbing the waveform; null when not touching.
+    var scrubFraction by remember { mutableStateOf<Float?>(null) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
 
     val currentPosition = playerState.currentPositionMs
     val duration = playerState.durationMs
-
-    val displayPosition = if (isUserDragging) sliderPosition else currentPosition.toFloat()
     val maxRange = duration.coerceAtLeast(1L).toFloat()
 
+    // The player only reports its position a few times a second, so the playhead used to lurch
+    // forward on each report. Advance it on the render clock instead: anchored to the player's
+    // latest position, then gliding at real time until the next report re-anchors it — smooth
+    // motion without the drawn position ever drifting ahead of the audio.
+    var smoothPositionMs by remember { mutableFloatStateOf(currentPosition.toFloat()) }
+    // A seek sets this so the glide re-anchors at the target immediately, instead of sailing on
+    // from the old position until the player confirms the jump.
+    var seekAnchorMs by remember { mutableStateOf<Float?>(null) }
+    var seekVersion by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(playerState.isPlaying, playerState.isBuffering, currentPosition, seekVersion) {
+        val anchorPosition = seekAnchorMs ?: currentPosition.toFloat()
+        seekAnchorMs = null
+        if (!playerState.isPlaying || playerState.isBuffering) {
+            smoothPositionMs = anchorPosition
+            return@LaunchedEffect
+        }
+        var anchorFrame = 0L
+        var anchored = false
+        while (isActive) {
+            withFrameNanos { now ->
+                if (!anchored) {
+                    anchorFrame = now
+                    anchored = true
+                }
+                smoothPositionMs = (anchorPosition + (now - anchorFrame) / NANOS_PER_MS)
+                    .coerceIn(0f, maxRange)
+            }
+        }
+    }
+
+    val displayPosition = if (isUserDragging) sliderPosition else smoothPositionMs
+
     Column(modifier = modifier.fillMaxWidth()) {
-        Slider(
-            value = displayPosition.coerceIn(0f, maxRange),
-            onValueChange = { newValue ->
-                isUserDragging = true
-                sliderPosition = newValue
-            },
-            onValueChangeFinished = {
-                onSeek(sliderPosition.toLong())
-                isUserDragging = false
-            },
-            valueRange = 0f..maxRange,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.primary,
-                activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (peaks != null) {
+            // The waveform is the seek bar: the drawn playhead follows the track, and the finger
+            // only overrides it once a scrub is under way. An empty set of peaks is the analysing
+            // state, which the bar draws as a waving line.
+            val progress = scrubFraction
+                ?: (displayPosition / maxRange).coerceIn(0f, 1f)
+
+            WaveformSeekBar(
+                peaks = peaks,
+                progress = progress,
+                onScrub = { fraction -> scrubFraction = fraction },
+                onSeek = { fraction ->
+                    val target = (fraction * maxRange).toLong()
+                    seekAnchorMs = target.toFloat()
+                    seekVersion++
+                    onSeek(target)
+                    scrubFraction = null
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            // Same height as the waveform it stands in for, so the controls below do not shift
+            // when the peaks finish decoding.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Slider(
+                    value = displayPosition.coerceIn(0f, maxRange),
+                    onValueChange = { newValue ->
+                        isUserDragging = true
+                        sliderPosition = newValue
+                    },
+                    onValueChangeFinished = {
+                        val target = sliderPosition.toLong()
+                        seekAnchorMs = target.toFloat()
+                        seekVersion++
+                        onSeek(target)
+                        isUserDragging = false
+                    },
+                    valueRange = 0f..maxRange,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        val shownPosition = scrubFraction?.let { fraction -> (fraction * maxRange).toLong() }
+            ?: displayPosition.toLong()
 
         Row(
             modifier = Modifier
@@ -359,7 +450,7 @@ private fun PlaybackProgressSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = formatMs(displayPosition.toLong()),
+                text = formatMs(shownPosition),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -475,6 +566,11 @@ private fun PlaybackControlsSection(
 // =====================================================================
 // HELPER FUNCTIONS
 // =====================================================================
+
+/** Shared empty array: the analysing waveform reads it as "draw the waving placeholder". */
+private val EMPTY_PEAKS = FloatArray(0)
+
+private const val NANOS_PER_MS = 1_000_000f
 
 private fun formatMs(ms: Long): String {
     if (ms <= 0) return "00:00"

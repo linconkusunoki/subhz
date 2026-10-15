@@ -15,6 +15,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.substream.MainActivity
 import com.substream.data.repository.SubsonicRepository
+import com.substream.player.waveform.WaveformPrefetcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,6 +63,9 @@ class PlaybackService : MediaSessionService(), KoinComponent {
     /** Holds the songs behind the player's media items, which the queue is stored from. */
     private val playerManager: PlayerManager by inject()
 
+    /** Warms waveform caches ahead of the UI, so Now Playing never has to decode in front of a user. */
+    private val waveformPrefetcher: WaveformPrefetcher by inject()
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val scrobbleTracker = ScrobbleTracker()
     private var scrobbleJob: Job? = null
@@ -107,6 +111,7 @@ class PlaybackService : MediaSessionService(), KoinComponent {
             if (isPlaying) {
                 startScrobbleWatch()
                 startQueueSaveWatch()
+                prefetchWaveforms()
             } else {
                 stopScrobbleWatch()
                 stopQueueSaveWatch()
@@ -119,7 +124,22 @@ class PlaybackService : MediaSessionService(), KoinComponent {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             // The track the server would resume has changed, so the stored one is stale.
             serviceScope.launch { persistQueue() }
+            prefetchWaveforms()
         }
+    }
+
+    /**
+     * Starts building the waveform for the current track and the next few, so opening Now Playing
+     * or skipping shows one immediately. Runs while the service is alive — including in the
+     * background — because decoding the current track does not need the UI to be on screen.
+     */
+    private fun prefetchWaveforms() {
+        val player = exoPlayer ?: return
+        val queue = playerManager.currentQueue()
+        if (queue.isEmpty()) return
+        val currentId = player.currentMediaItem?.mediaId
+        val index = queue.indexOfFirst { song -> song.id == currentId }.coerceAtLeast(0)
+        waveformPrefetcher.prefetch(queue.drop(index))
     }
 
     /**

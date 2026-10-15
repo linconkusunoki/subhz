@@ -15,9 +15,12 @@ import com.substream.data.preferences.ServerPreferences
 import com.substream.data.repository.SubsonicRepository
 import com.substream.player.PlayerManager
 import com.substream.player.cache.MediaCacheManager
+import com.substream.player.waveform.WaveformPrefetcher
+import com.substream.player.waveform.WaveformRepository
 import com.substream.ui.components.AddToPlaylistViewModel
 import com.substream.ui.components.LyricsViewModel
 import com.substream.ui.components.RatingViewModel
+import com.substream.ui.components.WaveformViewModel
 import com.substream.ui.screens.AlbumDetailViewModel
 import com.substream.ui.screens.AlbumsViewModel
 import com.substream.ui.screens.ArtistDetailViewModel
@@ -100,6 +103,22 @@ val appModule = module {
         )
     }
 
+    // Decodes and caches per-track waveforms. Reads through the same media cache the player uses,
+    // so an analysed track's bytes are not downloaded twice.
+    single {
+        WaveformRepository(
+            context = androidContext(),
+            cacheDataSourceFactory = get(),
+            serverPreferences = get(),
+        )
+    }
+
+    // Builds the current track's waveform (and the next few) as playback runs, so the UI never
+    // has to decode in front of the user.
+    single {
+        WaveformPrefetcher(playerManager = get(), repository = get())
+    }
+
     // 4. viewModel {} tells Koin how to build our ViewModels
     viewModel {
         LoginViewModel(repository = get(), serverPreferences = get())
@@ -127,6 +146,10 @@ val appModule = module {
 
     viewModel {
         LyricsViewModel(repository = get())
+    }
+
+    viewModel {
+        WaveformViewModel(playerManager = get(), repository = get())
     }
 
     viewModel {
